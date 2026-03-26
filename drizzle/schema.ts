@@ -7,6 +7,7 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   passwordHash: varchar("passwordHash", { length: 256 }),
+  emailVerified: boolean("emailVerified").default(false).notNull(),
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -16,6 +17,20 @@ export const users = mysqlTable("users", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+// ===== メール認証 & パスワードリセットトークン =====
+export const emailTokens = mysqlTable("email_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  token: varchar("token", { length: 128 }).notNull().unique(),
+  type: mysqlEnum("type", ["verify", "reset"]).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  usedAt: timestamp("usedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type EmailToken = typeof emailTokens.$inferSelect;
+export type InsertEmailToken = typeof emailTokens.$inferInsert;
 
 // ===== サブスクリプション/プランステータス =====
 export const subscriptions = mysqlTable("subscriptions", {

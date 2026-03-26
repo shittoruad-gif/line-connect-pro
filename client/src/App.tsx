@@ -21,6 +21,7 @@ import ChatbotPage from "./pages/Chatbot";
 import ChatbotEditorPage from "./pages/ChatbotEditor";
 import { PortalDashboard, PortalLineSettings, withPortalClient } from "./pages/portal";
 import LandingPage from "./pages/Landing";
+import { LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage } from "./pages/AuthPages";
 import ZoomHome from "./pages/ZoomHome";
 import ZoomHistory from "./pages/ZoomHistory";
 import ZoomSettingsPage from "./pages/ZoomSettings";
@@ -28,6 +29,7 @@ import AppSettingsPage from "./pages/AppSettingsPage";
 import InvitationTemplatePage from "./pages/InvitationTemplatePage";
 import RecurringMeetingPage from "./pages/RecurringMeetingPage";
 import PasscodeManagement from "./pages/PasscodeManagement";
+import ResetPassword from "./pages/ResetPassword";
 
 // Portal-wrapped versions of admin pages (auto-inject client context)
 const PortalRichMenus = withPortalClient(RichMenusPage);
@@ -99,6 +101,18 @@ function AppRouter() {
 
   if (location === "/lp") {
     return <LandingPage />;
+  }
+  if (location === "/login") {
+    return <LoginPage />;
+  }
+  if (location === "/register") {
+    return <RegisterPage />;
+  }
+  if (location === "/forgot-password") {
+    return <ForgotPasswordPage />;
+  }
+  if (location.startsWith("/reset-password")) {
+    return <ResetPasswordPage />;
   }
   if (location.startsWith("/portal")) {
     return <PortalRouter />;

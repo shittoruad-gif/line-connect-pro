@@ -21,6 +21,7 @@ import {
   RecurringMeeting, InsertRecurringMeeting, recurringMeetings,
   subscriptions, Subscription, InsertSubscription,
   passcodes, Passcode, InsertPasscode,
+  emailTokens, EmailToken, InsertEmailToken,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -913,4 +914,38 @@ export async function getFriendStatusBreakdown(clientId: number) {
     .where(eq(friends.clientId, clientId))
     .groupBy(friends.status);
   return result;
+}
+
+// ===== Email Tokens =====
+export async function createEmailToken(data: { userId: number; token: string; type: "verify" | "reset"; expiresAt: Date }): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  // Invalidate previous tokens of same type for same user
+  await db.delete(emailTokens).where(and(eq(emailTokens.userId, data.userId), eq(emailTokens.type, data.type)));
+  await db.insert(emailTokens).values(data);
+}
+
+export async function getEmailToken(token: string): Promise<EmailToken | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(emailTokens).where(eq(emailTokens.token, token)).limit(1);
+  return rows[0];
+}
+
+export async function markEmailTokenUsed(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(emailTokens).set({ usedAt: new Date() }).where(eq(emailTokens.id, id));
+}
+
+export async function setEmailVerified(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ emailVerified: true } as any).where(eq(users.id, userId));
+}
+
+export async function updatePasswordHash(userId: number, passwordHash: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ passwordHash } as any).where(eq(users.id, userId));
 }

@@ -26,7 +26,7 @@ import { useIsMobile } from "@/hooks/useMobile";
 import {
   LayoutDashboard, LogOut, PanelLeft, Building2, MessageSquare,
   Menu, Bot, Send, Users, FileText, Palette, Settings, ChevronDown,
-  MessageCircle, Video, Zap, History, Sliders, Mail, RefreshCw, Ticket,
+  MessageCircle, Video, Zap, History, Sliders, Mail, RefreshCw, Ticket, MailCheck,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -293,7 +293,7 @@ function DashboardLayoutContent({
 
 /** メール+パスワードログインフォーム */
 function LoginForm() {
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "forgot" | "registered">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -303,6 +303,21 @@ function LoginForm() {
     e.preventDefault();
     setLoading(true);
     try {
+      if (mode === "forgot") {
+        const res = await fetch("/api/auth/forgot-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        if (res.ok) {
+          toast.success("パスワードリセットメールを送信しました。メールをご確認ください。");
+        } else {
+          const data = await res.json();
+          toast.error(data.error || "送信に失敗しました");
+        }
+        return;
+      }
+
       const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
       const body = mode === "login"
         ? { email, password }
@@ -316,7 +331,25 @@ function LoginForm() {
 
       const data = await res.json();
       if (!res.ok) {
+        if (data.code === "EMAIL_NOT_VERIFIED") {
+          toast.error("メールアドレスが未確認です。受信トレイをご確認ください。", { duration: 6000 });
+          // Offer to resend
+          const resend = await fetch("/api/auth/resend-verification", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
+          });
+          if (resend.ok) {
+            toast.info("確認メールを再送信しました。", { duration: 5000 });
+          }
+          return;
+        }
         toast.error(data.error || "エラーが発生しました");
+        return;
+      }
+
+      if (mode === "register") {
+        setMode("registered");
         return;
       }
 
@@ -328,6 +361,33 @@ function LoginForm() {
     }
   };
 
+  // Registration success - show verification notice
+  if (mode === "registered") {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="flex flex-col items-center gap-6 p-8 max-w-md w-full text-center">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
+              <Video className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <span className="text-xl font-bold tracking-tight">Zoom URL 自動発行</span>
+          </div>
+          <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto">
+            <Mail className="h-8 w-8 text-primary" />
+          </div>
+          <h1 className="text-2xl font-bold">確認メールを送信しました</h1>
+          <p className="text-muted-foreground">
+            <strong>{email}</strong> に確認メールを送信しました。<br />
+            メール内のリンクをクリックして、アカウントを有効化してください。
+          </p>
+          <Button variant="outline" onClick={() => { setMode("login"); setPassword(""); }}>
+            ログイン画面に戻る
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-background">
       <div className="flex flex-col items-center gap-6 p-8 max-w-md w-full">
@@ -338,8 +398,13 @@ function LoginForm() {
           <span className="text-xl font-bold tracking-tight">Zoom URL 自動発行</span>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-center">
-          {mode === "login" ? "ログイン" : "アカウント作成"}
+          {mode === "login" ? "ログイン" : mode === "register" ? "アカウント作成" : "パスワードをリセット"}
         </h1>
+        {mode === "forgot" && (
+          <p className="text-sm text-muted-foreground text-center">
+            登録したメールアドレスを入力してください。パスワードリセットのリンクを送信します。
+          </p>
+        )}
         <form onSubmit={handleSubmit} className="w-full space-y-4">
           {mode === "register" && (
             <div>
@@ -361,26 +426,35 @@ function LoginForm() {
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
-          <div>
-            <label className="text-sm text-muted-foreground mb-1 block">パスワード</label>
-            <Input
-              type="password"
-              required
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={6}
-            />
-          </div>
+          {mode !== "forgot" && (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">パスワード</label>
+              <Input
+                type="password"
+                required
+                placeholder="6文字以上"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={6}
+              />
+            </div>
+          )}
           <Button type="submit" size="lg" className="w-full" disabled={loading}>
-            {loading ? "処理中..." : mode === "login" ? "ログイン" : "アカウント作成"}
+            {loading ? "処理中..." : mode === "login" ? "ログイン" : mode === "register" ? "アカウント作成" : "リセットメールを送信"}
           </Button>
         </form>
+        {mode === "login" && (
+          <button className="text-xs text-muted-foreground hover:text-primary" onClick={() => setMode("forgot")}>
+            パスワードを忘れた方
+          </button>
+        )}
         <p className="text-sm text-muted-foreground">
           {mode === "login" ? (
             <>アカウントをお持ちでない方は <button className="text-primary hover:underline" onClick={() => setMode("register")}>新規登録</button></>
-          ) : (
+          ) : mode === "register" ? (
             <>既にアカウントをお持ちの方は <button className="text-primary hover:underline" onClick={() => setMode("login")}>ログイン</button></>
+          ) : (
+            <button className="text-primary hover:underline" onClick={() => setMode("login")}>ログインに戻る</button>
           )}
         </p>
       </div>
