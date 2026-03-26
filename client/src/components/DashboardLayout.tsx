@@ -89,16 +89,16 @@ export default function DashboardLayout({
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
           <div className="flex items-center gap-3 mb-2">
             <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-              <MessageSquare className="h-5 w-5 text-primary-foreground" />
+              <Video className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold tracking-tight">LINE Connect Pro</span>
+            <span className="text-xl font-bold tracking-tight">Zoom URL 自動発行</span>
           </div>
           <div className="flex flex-col items-center gap-4">
             <h1 className="text-2xl font-semibold tracking-tight text-center">
               ログインしてください
             </h1>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              LINE Connect Proを利用するにはログインが必要です。
+              Zoom URL 自動発行を利用するにはログインが必要です。
             </p>
           </div>
           <Button
@@ -201,10 +201,10 @@ function DashboardLayoutContent({
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
-                    <MessageSquare className="h-3.5 w-3.5 text-primary-foreground" />
+                    <Video className="h-3.5 w-3.5 text-primary-foreground" />
                   </div>
                   <span className="font-semibold tracking-tight truncate text-sm">
-                    LINE Connect Pro
+                    Zoom URL 自動発行
                   </span>
                 </div>
               ) : null}
