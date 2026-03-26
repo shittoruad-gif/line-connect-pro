@@ -20,7 +20,8 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { getLoginUrl } from "@/const";
+import { Input } from "./ui/input";
+import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   LayoutDashboard, LogOut, PanelLeft, Building2, MessageSquare,
@@ -87,35 +88,7 @@ export default function DashboardLayout({
   }
 
   if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-              <Video className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-bold tracking-tight">Zoom URL 自動発行</span>
-          </div>
-          <div className="flex flex-col items-center gap-4">
-            <h1 className="text-2xl font-semibold tracking-tight text-center">
-              ログインしてください
-            </h1>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
-              Zoom URL 自動発行を利用するにはログインが必要です。
-            </p>
-          </div>
-          <Button
-            onClick={() => {
-              window.location.href = getLoginUrl();
-            }}
-            size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
-          >
-            ログイン
-          </Button>
-        </div>
-      </div>
-    );
+    return <LoginForm />;
   }
 
   return (
@@ -315,5 +288,102 @@ function DashboardLayoutContent({
         <main className="flex-1 p-4 md:p-6">{children}</main>
       </SidebarInset>
     </>
+  );
+}
+
+/** メール+パスワードログインフォーム */
+function LoginForm() {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
+      const body = mode === "login"
+        ? { email, password }
+        : { email, password, name: name || undefined };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "エラーが発生しました");
+        return;
+      }
+
+      window.location.reload();
+    } catch {
+      toast.error("通信エラーが発生しました");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="flex flex-col items-center gap-6 p-8 max-w-md w-full">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
+            <Video className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <span className="text-xl font-bold tracking-tight">Zoom URL 自動発行</span>
+        </div>
+        <h1 className="text-2xl font-semibold tracking-tight text-center">
+          {mode === "login" ? "ログイン" : "アカウント作成"}
+        </h1>
+        <form onSubmit={handleSubmit} className="w-full space-y-4">
+          {mode === "register" && (
+            <div>
+              <label className="text-sm text-muted-foreground mb-1 block">お名前</label>
+              <Input
+                placeholder="山田 太郎"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+          )}
+          <div>
+            <label className="text-sm text-muted-foreground mb-1 block">メールアドレス</label>
+            <Input
+              type="email"
+              required
+              placeholder="email@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-sm text-muted-foreground mb-1 block">パスワード</label>
+            <Input
+              type="password"
+              required
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={6}
+            />
+          </div>
+          <Button type="submit" size="lg" className="w-full" disabled={loading}>
+            {loading ? "処理中..." : mode === "login" ? "ログイン" : "アカウント作成"}
+          </Button>
+        </form>
+        <p className="text-sm text-muted-foreground">
+          {mode === "login" ? (
+            <>アカウントをお持ちでない方は <button className="text-primary hover:underline" onClick={() => setMode("register")}>新規登録</button></>
+          ) : (
+            <>既にアカウントをお持ちの方は <button className="text-primary hover:underline" onClick={() => setMode("login")}>ログイン</button></>
+          )}
+        </p>
+      </div>
+    </div>
   );
 }
