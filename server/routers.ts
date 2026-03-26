@@ -380,6 +380,78 @@ export const appRouter = router({
       }),
   }),
 
+  // ===== Analytics =====
+  analytics: router({
+    messageChart: protectedProcedure
+      .input(z.object({ clientId: z.number(), days: z.number().optional() }))
+      .query(async ({ input }) => db.getMessageAnalytics(input.clientId, input.days)),
+    friendGrowth: protectedProcedure
+      .input(z.object({ clientId: z.number(), days: z.number().optional() }))
+      .query(async ({ input }) => db.getFriendGrowth(input.clientId, input.days)),
+    messageTypeBreakdown: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.getMessageTypeBreakdown(input.clientId)),
+    friendStatusBreakdown: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.getFriendStatusBreakdown(input.clientId)),
+  }),
+
+  // ===== Broadcast (一斉配信) =====
+  broadcast: router({
+    send: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        messageContent: z.string().min(1),
+        targetTags: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const channel = await db.getLineChannel(input.clientId);
+        if (!channel || !channel.channelAccessToken) throw new TRPCError({ code: "BAD_REQUEST", message: "LINEチャネルが設定されていません" });
+
+        // Get target friends
+        const allFriends = await db.listFriends(input.clientId, {});
+        let targets = allFriends.filter(f => f.status === "active");
+        if (input.targetTags && input.targetTags.length > 0) {
+          targets = targets.filter(f => {
+            const tags = (f.tags as string[]) || [];
+            return input.targetTags!.some(t => tags.includes(t));
+          });
+        }
+
+        let sentCount = 0;
+        let failedCount = 0;
+
+        for (const friend of targets) {
+          try {
+            await fetch("https://api.line.me/v2/bot/message/push", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${channel.channelAccessToken}`,
+              },
+              body: JSON.stringify({
+                to: friend.lineUserId,
+                messages: [{ type: "text", text: input.messageContent }],
+              }),
+            });
+            sentCount++;
+          } catch {
+            failedCount++;
+          }
+        }
+
+        await db.createMessageLog({
+          clientId: input.clientId,
+          messageType: "broadcast",
+          recipientCount: targets.length,
+          messageContent: input.messageContent,
+          status: failedCount === 0 ? "sent" : failedCount === targets.length ? "failed" : "sent",
+        });
+
+        return { sent: sentCount, failed: failedCount, total: targets.length };
+      }),
+  }),
+
   // ===== Templates =====
   templates: router({
     list: protectedProcedure
@@ -1297,6 +1369,87 @@ If no clear date/time is found, return empty string for parsedDateTime.`,
           added: newMeetings.length,
           meetings: newMeetings,
         };
+      }),
+  }),
+
+  // ===== Subscription & Billing =====
+  subscription: router({
+    /** 自分のプランを取得 */
+    me: protectedProcedure.query(async ({ ctx }) => {
+      const sub = await db.getSubscription(ctx.user.id);
+      if (!sub) return { plan: "free" as const, active: false };
+      const now = new Date();
+      const active = sub.plan === "lifetime"
+        || (sub.plan === "paid" && sub.expiresAt != null && sub.expiresAt > now);
+      return {
+        plan: sub.plan,
+        active,
+        expiresAt: sub.expiresAt?.toISOString() ?? null,
+        passcodeUsed: sub.passcodeUsed,
+      };
+    }),
+
+    /** パスコードでアクティベーション */
+    activatePasscode: protectedProcedure
+      .input(z.object({ code: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        const pc = await db.getPasscodeByCode(input.code.trim());
+        if (!pc || !pc.isActive) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "無効なパスコードです" });
+        }
+        if (pc.currentUses >= pc.maxUses) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "このパスコードは使用上限に達しています" });
+        }
+        await db.upsertSubscription({
+          userId: ctx.user.id,
+          plan: pc.plan as "lifetime" | "paid",
+          passcodeUsed: pc.code,
+        });
+        await db.incrementPasscodeUsage(pc.id);
+        return { plan: pc.plan, success: true };
+      }),
+
+    /** 管理者: 全サブスクリプション一覧 */
+    listAll: adminProcedure.query(async () => db.getAllSubscriptions()),
+
+    /** 管理者: ユーザーのプランを変更 */
+    setUserPlan: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        plan: z.enum(["free", "paid", "lifetime"]),
+      }))
+      .mutation(async ({ input }) => {
+        await db.upsertSubscription({ userId: input.userId, plan: input.plan });
+        return { success: true };
+      }),
+  }),
+
+  // ===== Passcode Management (Admin) =====
+  passcodes: router({
+    list: adminProcedure.query(async () => db.getAllPasscodes()),
+    create: adminProcedure
+      .input(z.object({
+        code: z.string().min(4).max(128),
+        plan: z.enum(["lifetime", "paid"]).default("lifetime"),
+        maxUses: z.number().int().min(1).max(9999).default(1),
+      }))
+      .mutation(async ({ input }) => {
+        const existing = await db.getPasscodeByCode(input.code);
+        if (existing) throw new TRPCError({ code: "CONFLICT", message: "このコードは既に存在します" });
+        const id = await db.createPasscode(input);
+        return { id, code: input.code };
+      }),
+    toggle: adminProcedure
+      .input(z.object({ id: z.number(), isActive: z.boolean() }))
+      .mutation(async ({ input }) => {
+        await db.togglePasscode(input.id, input.isActive);
+        return { success: true };
+      }),
+    delete: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deletePasscode(input.id);
+        return { success: true };
       }),
   }),
 });

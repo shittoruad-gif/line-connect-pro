@@ -16,6 +16,35 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
+// ===== サブスクリプション/プランステータス =====
+export const subscriptions = mysqlTable("subscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  plan: mysqlEnum("plan", ["free", "paid", "lifetime"]).default("free").notNull(),
+  activatedAt: timestamp("activatedAt"),
+  expiresAt: timestamp("expiresAt"), // paid: 課金期限, lifetime: null
+  passcodeUsed: varchar("passcodeUsed", { length: 128 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;
+
+// ===== パスコード（永年無料／割引コード） =====
+export const passcodes = mysqlTable("passcodes", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 128 }).notNull().unique(),
+  plan: mysqlEnum("plan", ["lifetime", "paid"]).default("lifetime").notNull(),
+  maxUses: int("maxUses").default(1).notNull(),
+  currentUses: int("currentUses").default(0).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Passcode = typeof passcodes.$inferSelect;
+export type InsertPasscode = typeof passcodes.$inferInsert;
+
 // ===== Clients (クライアント企業) =====
 export const clients = mysqlTable("clients", {
   id: int("id").autoincrement().primaryKey(),

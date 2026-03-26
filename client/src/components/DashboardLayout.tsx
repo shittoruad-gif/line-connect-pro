@@ -25,12 +25,14 @@ import { useIsMobile } from "@/hooks/useMobile";
 import {
   LayoutDashboard, LogOut, PanelLeft, Building2, MessageSquare,
   Menu, Bot, Send, Users, FileText, Palette, Settings, ChevronDown,
-  MessageCircle, Video, Zap, History, Sliders, Mail, RefreshCw,
+  MessageCircle, Video, Zap, History, Sliders, Mail, RefreshCw, Ticket,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
+import { trpc } from "@/lib/trpc";
+import PricingGate from "@/pages/PricingGate";
 
 export type MenuItem = {
   icon: React.ComponentType<{ className?: string }>;
@@ -57,6 +59,7 @@ const menuItems: MenuItem[] = [
   { icon: Mail, label: "招待文テンプレート", path: "/invitation-template" },
   { icon: Video, label: "Zoom設定", path: "/zoom-settings" },
   { icon: Sliders, label: "Zoomデフォルト設定", path: "/app-settings" },
+  { icon: Ticket, label: "パスコード管理", path: "/passcodes", adminOnly: true },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -116,18 +119,35 @@ export default function DashboardLayout({
   }
 
   return (
-    <SidebarProvider
-      style={
-        {
-          "--sidebar-width": `${sidebarWidth}px`,
-        } as CSSProperties
-      }
-    >
-      <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
-        {children}
-      </DashboardLayoutContent>
-    </SidebarProvider>
+    <SubscriptionGate user={user}>
+      <SidebarProvider
+        style={
+          {
+            "--sidebar-width": `${sidebarWidth}px`,
+          } as CSSProperties
+        }
+      >
+        <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
+          {children}
+        </DashboardLayoutContent>
+      </SidebarProvider>
+    </SubscriptionGate>
   );
+}
+
+/** 課金ゲート: admin は常にパス、それ以外は有料/lifetimeプランが必要 */
+function SubscriptionGate({ user, children }: { user: { id: number; role: string }; children: React.ReactNode }) {
+  const { data: sub, isLoading } = trpc.subscription.me.useQuery();
+
+  // 管理者は常にアクセス可能
+  if (user.role === "admin") return <>{children}</>;
+
+  if (isLoading) return <DashboardLayoutSkeleton />;
+
+  // プランが有効でない場合は料金ゲートを表示
+  if (!sub?.active) return <PricingGate />;
+
+  return <>{children}</>;
 }
 
 type DashboardLayoutContentProps = {

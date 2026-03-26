@@ -2,6 +2,7 @@ import { Express, Request, Response } from "express";
 import crypto from "crypto";
 import * as db from "./db";
 import { invokeLLM } from "./_core/llm";
+import { broadcastNotification } from "./sse";
 
 // ===== LINE API Helper =====
 async function lineApiRequest(accessToken: string, method: string, path: string, body?: unknown) {
@@ -147,6 +148,15 @@ async function handleFollowEvent(clientId: number, accessToken: string, lineUser
     } else {
       await db.createFriend({ clientId, lineUserId, displayName, pictureUrl });
     }
+
+    broadcastNotification({
+      type: "friend_added",
+      clientId,
+      title: "新しい友だち",
+      message: `${displayName} さんが友だち追加しました`,
+      timestamp: new Date().toISOString(),
+      data: { lineUserId, displayName },
+    });
 
     // Send greeting message
     const greeting = await db.getGreeting(clientId);

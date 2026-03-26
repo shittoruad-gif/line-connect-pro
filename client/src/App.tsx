@@ -27,6 +27,7 @@ import ZoomSettingsPage from "./pages/ZoomSettings";
 import AppSettingsPage from "./pages/AppSettingsPage";
 import InvitationTemplatePage from "./pages/InvitationTemplatePage";
 import RecurringMeetingPage from "./pages/RecurringMeetingPage";
+import PasscodeManagement from "./pages/PasscodeManagement";
 
 // Portal-wrapped versions of admin pages (auto-inject client context)
 const PortalRichMenus = withPortalClient(RichMenusPage);
@@ -64,6 +65,7 @@ function AdminRouter() {
         <Route path="/app-settings" component={AppSettingsPage} />
         <Route path="/invitation-template" component={InvitationTemplatePage} />
         <Route path="/recurring" component={RecurringMeetingPage} />
+        <Route path="/passcodes" component={PasscodeManagement} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

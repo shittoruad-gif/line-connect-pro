@@ -19,6 +19,8 @@ import {
   Meeting, InsertMeeting, meetings,
   InvitationTemplate, InsertInvitationTemplate, invitationTemplates,
   RecurringMeeting, InsertRecurringMeeting, recurringMeetings,
+  subscriptions, Subscription, InsertSubscription,
+  passcodes, Passcode, InsertPasscode,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -749,4 +751,159 @@ export async function updateRecurringMeeting(
   const db = await getDb();
   if (!db) return;
   await db.update(recurringMeetings).set(data).where(eq(recurringMeetings.id, id));
+}
+
+// ===== Subscriptions =====
+export async function getSubscription(userId: number): Promise<Subscription | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).limit(1);
+  return rows[0];
+}
+
+export async function upsertSubscription(data: { userId: number; plan: "free" | "paid" | "lifetime"; passcodeUsed?: string }): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await getSubscription(data.userId);
+  if (existing) {
+    await db.update(subscriptions).set({
+      plan: data.plan,
+      activatedAt: new Date(),
+      expiresAt: data.plan === "paid" ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null,
+      passcodeUsed: data.passcodeUsed ?? existing.passcodeUsed,
+    }).where(eq(subscriptions.id, existing.id));
+  } else {
+    await db.insert(subscriptions).values({
+      userId: data.userId,
+      plan: data.plan,
+      activatedAt: new Date(),
+      expiresAt: data.plan === "paid" ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null,
+      passcodeUsed: data.passcodeUsed ?? null,
+    });
+  }
+}
+
+export async function getAllSubscriptions() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: subscriptions.id,
+    userId: subscriptions.userId,
+    plan: subscriptions.plan,
+    activatedAt: subscriptions.activatedAt,
+    expiresAt: subscriptions.expiresAt,
+    passcodeUsed: subscriptions.passcodeUsed,
+    userName: users.name,
+    userEmail: users.email,
+  }).from(subscriptions).leftJoin(users, eq(subscriptions.userId, users.id)).orderBy(desc(subscriptions.updatedAt));
+}
+
+// ===== Passcodes =====
+export async function getPasscodeByCode(code: string): Promise<Passcode | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(passcodes).where(eq(passcodes.code, code)).limit(1);
+  return rows[0];
+}
+
+export async function createPasscode(data: { code: string; plan?: "lifetime" | "paid"; maxUses?: number }): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const result = await db.insert(passcodes).values({
+    code: data.code,
+    plan: data.plan ?? "lifetime",
+    maxUses: data.maxUses ?? 1,
+    currentUses: 0,
+    isActive: true,
+  });
+  return Number(result[0].insertId);
+}
+
+export async function incrementPasscodeUsage(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(passcodes).set({
+    currentUses: sql`${passcodes.currentUses} + 1`,
+  }).where(eq(passcodes.id, id));
+}
+
+export async function getAllPasscodes() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(passcodes).orderBy(desc(passcodes.createdAt));
+}
+
+export async function deletePasscode(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(passcodes).where(eq(passcodes.id, id));
+}
+
+export async function togglePasscode(id: number, isActive: boolean): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(passcodes).set({ isActive }).where(eq(passcodes.id, id));
+}
+
+// ===== Analytics =====
+export async function getMessageAnalytics(clientId: number, days: number = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const result = await db.select({
+    date: sql<string>`DATE(createdAt)`,
+    total: sql<number>`count(*)`,
+    sent: sql<number>`sum(case when status = 'sent' then 1 else 0 end)`,
+    failed: sql<number>`sum(case when status = 'failed' then 1 else 0 end)`,
+    auto_reply: sql<number>`sum(case when messageType = 'auto_reply' then 1 else 0 end)`,
+    broadcast: sql<number>`sum(case when messageType = 'broadcast' then 1 else 0 end)`,
+    step: sql<number>`sum(case when messageType = 'step' then 1 else 0 end)`,
+    manual: sql<number>`sum(case when messageType = 'manual' then 1 else 0 end)`,
+  })
+    .from(messageLogs)
+    .where(and(eq(messageLogs.clientId, clientId), sql`createdAt >= ${since}`))
+    .groupBy(sql`DATE(createdAt)`)
+    .orderBy(sql`DATE(createdAt)`);
+  return result;
+}
+
+export async function getFriendGrowth(clientId: number, days: number = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const result = await db.select({
+    date: sql<string>`DATE(addedAt)`,
+    count: sql<number>`count(*)`,
+  })
+    .from(friends)
+    .where(and(eq(friends.clientId, clientId), sql`addedAt >= ${since}`))
+    .groupBy(sql`DATE(addedAt)`)
+    .orderBy(sql`DATE(addedAt)`);
+  return result;
+}
+
+export async function getMessageTypeBreakdown(clientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select({
+    type: messageLogs.messageType,
+    count: sql<number>`count(*)`,
+  })
+    .from(messageLogs)
+    .where(eq(messageLogs.clientId, clientId))
+    .groupBy(messageLogs.messageType);
+  return result;
+}
+
+export async function getFriendStatusBreakdown(clientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select({
+    status: friends.status,
+    count: sql<number>`count(*)`,
+  })
+    .from(friends)
+    .where(eq(friends.clientId, clientId))
+    .groupBy(friends.status);
+  return result;
 }
