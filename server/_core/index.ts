@@ -32,6 +32,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
+  app.set("trust proxy", 1);
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
@@ -44,6 +45,11 @@ async function startServer() {
   registerLineWebhookRoutes(app);
   // SSE real-time notifications
   registerSSERoutes(app);
+  // Health check
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",
@@ -59,12 +65,7 @@ async function startServer() {
     serveStatic(app);
   }
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
-
-  if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
-  }
+  const port = parseInt(process.env.PORT || "3000");
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
