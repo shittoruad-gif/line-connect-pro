@@ -3,17 +3,17 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { MessageSquare, ArrowLeft, Check, Mail, Eye, EyeOff } from "lucide-react";
+import { Video, ArrowLeft, Check, Mail, Eye, EyeOff } from "lucide-react";
 
 function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-[#06C755] flex items-center justify-center">
-            <MessageSquare className="w-6 h-6 text-white" />
+          <div className="w-10 h-10 rounded-xl bg-[#2D8CFF] flex items-center justify-center">
+            <Video className="w-6 h-6 text-white" />
           </div>
-          <span className="text-xl font-bold text-white">LINE Connect Pro</span>
+          <span className="text-xl font-bold text-white">Zoom URL 自動発行</span>
         </div>
         {children}
       </div>
@@ -32,7 +32,7 @@ function PasswordInput({ value, onChange, placeholder = "パスワード" }: { v
         placeholder={placeholder}
         required
         minLength={6}
-        className="bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600 focus:border-[#06C755] pr-10"
+        className="bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600 focus:border-[#2D8CFF] pr-10"
       />
       <button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300" onClick={() => setShow(!show)}>
         {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -95,12 +95,12 @@ export function LoginPage() {
       <Card className="bg-white/[0.02] border-white/5">
         <CardContent className="p-6 md:p-8">
           <h1 className="text-2xl font-bold text-white text-center mb-2">ログイン</h1>
-          <p className="text-sm text-gray-400 text-center mb-6">LINE Connect Proにログインして、LINE運用を管理しましょう</p>
+          <p className="text-sm text-gray-400 text-center mb-6">LINE公式アカウントの運用を始めましょう</p>
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">メールアドレス</label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="email@example.com" className="bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600 focus:border-[#06C755]" />
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="email@example.com" className="bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600 focus:border-[#2D8CFF]" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">パスワード</label>
@@ -111,25 +111,25 @@ export function LoginPage() {
               <div className={`text-sm p-3 rounded-lg ${needsVerification ? "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>
                 {error}
                 {needsVerification && (
-                  <button type="button" className="block mt-2 text-[#06C755] hover:underline text-xs" onClick={handleResendVerification}>
+                  <button type="button" className="block mt-2 text-[#2D8CFF] hover:underline text-xs" onClick={handleResendVerification}>
                     確認メールを再送する
                   </button>
                 )}
               </div>
             )}
 
-            <Button type="submit" disabled={loading} className="w-full bg-[#06C755] hover:bg-[#05b34c] text-white h-11">
+            <Button type="submit" disabled={loading} className="w-full bg-[#2D8CFF] hover:bg-[#1a7ae8] text-white h-11">
               {loading ? "ログイン中..." : "ログイン"}
             </Button>
           </form>
 
           <div className="mt-6 space-y-3 text-center">
-            <button className="text-sm text-[#06C755] hover:underline" onClick={() => navigate("/forgot-password")}>
+            <button className="text-sm text-[#2D8CFF] hover:underline" onClick={() => navigate("/forgot-password")}>
               パスワードをお忘れですか？
             </button>
             <p className="text-sm text-gray-500">
               アカウントをお持ちでないですか？{" "}
-              <button className="text-[#06C755] hover:underline" onClick={() => navigate("/register")}>新規登録</button>
+              <button className="text-[#2D8CFF] hover:underline" onClick={() => navigate("/register")}>新規登録</button>
             </p>
           </div>
         </CardContent>
@@ -189,10 +189,10 @@ export function RegisterPage() {
   if (success) {
     return (
       <AuthLayout>
-        <Card className="bg-white/[0.02] border-[#06C755]/30">
+        <Card className="bg-white/[0.02] border-[#2D8CFF]/30">
           <CardContent className="p-8 text-center">
-            <div className="w-16 h-16 rounded-full bg-[#06C755]/20 flex items-center justify-center mx-auto mb-4">
-              <Mail className="w-8 h-8 text-[#06C755]" />
+            <div className="w-16 h-16 rounded-full bg-[#2D8CFF]/20 flex items-center justify-center mx-auto mb-4">
+              <Mail className="w-8 h-8 text-[#2D8CFF]" />
             </div>
             <h2 className="text-xl font-bold text-white mb-2">確認メールを送信しました</h2>
             <p className="text-sm text-gray-400 mb-4">
@@ -219,11 +219,11 @@ export function RegisterPage() {
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">お名前・店舗名</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="○○サロン" className="bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600 focus:border-[#06C755]" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="○○サロン" className="bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600 focus:border-[#2D8CFF]" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">メールアドレス</label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="email@example.com" className="bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600 focus:border-[#06C755]" />
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="email@example.com" className="bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600 focus:border-[#2D8CFF]" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">パスワード（6文字以上）</label>
@@ -236,7 +236,7 @@ export function RegisterPage() {
 
             {error && <div className="text-sm text-red-400 bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</div>}
 
-            <Button type="submit" disabled={loading} className="w-full bg-[#06C755] hover:bg-[#05b34c] text-white h-11">
+            <Button type="submit" disabled={loading} className="w-full bg-[#2D8CFF] hover:bg-[#1a7ae8] text-white h-11">
               {loading ? "登録中..." : "無料で登録する"}
             </Button>
           </form>
@@ -247,7 +247,7 @@ export function RegisterPage() {
 
           <p className="text-sm text-gray-500 text-center mt-6">
             既にアカウントをお持ちですか？{" "}
-            <button className="text-[#06C755] hover:underline" onClick={() => navigate("/login")}>ログイン</button>
+            <button className="text-[#2D8CFF] hover:underline" onClick={() => navigate("/login")}>ログイン</button>
           </p>
         </CardContent>
       </Card>
@@ -293,10 +293,10 @@ export function ForgotPasswordPage() {
   if (success) {
     return (
       <AuthLayout>
-        <Card className="bg-white/[0.02] border-[#06C755]/30">
+        <Card className="bg-white/[0.02] border-[#2D8CFF]/30">
           <CardContent className="p-8 text-center">
-            <div className="w-16 h-16 rounded-full bg-[#06C755]/20 flex items-center justify-center mx-auto mb-4">
-              <Mail className="w-8 h-8 text-[#06C755]" />
+            <div className="w-16 h-16 rounded-full bg-[#2D8CFF]/20 flex items-center justify-center mx-auto mb-4">
+              <Mail className="w-8 h-8 text-[#2D8CFF]" />
             </div>
             <h2 className="text-xl font-bold text-white mb-2">メールを送信しました</h2>
             <p className="text-sm text-gray-400 mb-6">
@@ -322,18 +322,18 @@ export function ForgotPasswordPage() {
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">メールアドレス</label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="email@example.com" className="bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600 focus:border-[#06C755]" />
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="email@example.com" className="bg-white/[0.03] border-white/10 text-white placeholder:text-gray-600 focus:border-[#2D8CFF]" />
             </div>
 
             {error && <div className="text-sm text-red-400 bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</div>}
 
-            <Button type="submit" disabled={loading} className="w-full bg-[#06C755] hover:bg-[#05b34c] text-white h-11">
+            <Button type="submit" disabled={loading} className="w-full bg-[#2D8CFF] hover:bg-[#1a7ae8] text-white h-11">
               {loading ? "送信中..." : "リセットメールを送信"}
             </Button>
           </form>
 
           <p className="text-sm text-gray-500 text-center mt-6">
-            <button className="text-[#06C755] hover:underline" onClick={() => navigate("/login")}>ログインに戻る</button>
+            <button className="text-[#2D8CFF] hover:underline" onClick={() => navigate("/login")}>ログインに戻る</button>
           </p>
         </CardContent>
       </Card>
@@ -401,14 +401,14 @@ export function ResetPasswordPage() {
   if (success) {
     return (
       <AuthLayout>
-        <Card className="bg-white/[0.02] border-[#06C755]/30">
+        <Card className="bg-white/[0.02] border-[#2D8CFF]/30">
           <CardContent className="p-8 text-center">
-            <div className="w-16 h-16 rounded-full bg-[#06C755]/20 flex items-center justify-center mx-auto mb-4">
-              <Check className="w-8 h-8 text-[#06C755]" />
+            <div className="w-16 h-16 rounded-full bg-[#2D8CFF]/20 flex items-center justify-center mx-auto mb-4">
+              <Check className="w-8 h-8 text-[#2D8CFF]" />
             </div>
             <h2 className="text-xl font-bold text-white mb-2">パスワードを変更しました</h2>
             <p className="text-sm text-gray-400 mb-6">新しいパスワードでログインしてください。</p>
-            <Button className="bg-[#06C755] hover:bg-[#05b34c] text-white" onClick={() => navigate("/login")}>
+            <Button className="bg-[#2D8CFF] hover:bg-[#1a7ae8] text-white" onClick={() => navigate("/login")}>
               ログインする
             </Button>
           </CardContent>
@@ -436,7 +436,7 @@ export function ResetPasswordPage() {
 
             {error && <div className="text-sm text-red-400 bg-red-500/10 p-3 rounded-lg border border-red-500/20">{error}</div>}
 
-            <Button type="submit" disabled={loading} className="w-full bg-[#06C755] hover:bg-[#05b34c] text-white h-11">
+            <Button type="submit" disabled={loading} className="w-full bg-[#2D8CFF] hover:bg-[#1a7ae8] text-white h-11">
               {loading ? "変更中..." : "パスワードを変更する"}
             </Button>
           </form>

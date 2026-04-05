@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Video, Check, ArrowLeft } from "lucide-react";
+import { MessageSquare, Check, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ResetPassword() {
@@ -79,7 +79,7 @@ export default function ResetPassword() {
       <div className="flex flex-col items-center gap-6 p-8 max-w-md w-full">
         <div className="flex items-center gap-3 mb-2">
           <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-            <Video className="h-5 w-5 text-primary-foreground" />
+            <MessageSquare className="h-5 w-5 text-primary-foreground" />
           </div>
           <span className="text-xl font-bold tracking-tight">Zoom URL 自動発行</span>
         </div>

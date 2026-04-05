@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Video, Check, ArrowRight, Ticket, Loader2, ExternalLink } from "lucide-react";
+import { MessageSquare, Check, ArrowRight, Ticket, Loader2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
 const PAYMENT_URL = "https://example.com/payment"; // 決済URL（後で設定変更可）
@@ -30,13 +30,13 @@ export default function PricingGate() {
         <div className="text-center space-y-3">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-              <Video className="h-5 w-5 text-primary-foreground" />
+              <MessageSquare className="h-5 w-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-bold tracking-tight">Zoom URL 自動発行</span>
           </div>
           <h1 className="text-2xl font-bold">プランの選択</h1>
           <p className="text-muted-foreground text-sm">
-            Zoom URL自動発行の全機能を利用するにはプランをご選択ください。
+            Zoom URL 自動発行の全機能を利用するにはプランをご選択ください。
           </p>
         </div>
 
@@ -55,12 +55,12 @@ export default function PricingGate() {
           <CardContent className="space-y-4">
             <ul className="space-y-2">
               {[
-                "スクリーンショットOCR（無制限）",
-                "Zoom URL自動発行",
-                "定期ミーティング一括発行",
-                "招待文テンプレート",
-                "Googleカレンダー連携",
-                "ミーティング履歴管理",
+                "ステップ配信・セグメント配信",
+                "リッチメニュー管理",
+                "AIチャットボット",
+                "自動化ルール（IF-THEN）",
+                "スコアリング・友だち管理",
+                "予約管理・決済連携",
               ].map((f) => (
                 <li key={f} className="flex items-center gap-2 text-sm">
                   <Check className="h-4 w-4 text-primary shrink-0" />

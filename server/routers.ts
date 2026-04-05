@@ -1452,6 +1452,762 @@ If no clear date/time is found, return empty string for parsedDateTime.`,
         return { success: true };
       }),
   }),
+
+  // ===== スコアリング =====
+  scoring: router({
+    listRules: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.listScoreRules(input.clientId)),
+    createRule: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        eventType: z.enum(["message_received", "link_clicked", "form_submitted", "purchase_completed", "friend_added", "rich_menu_tapped", "step_completed", "keyword_matched", "manual"]),
+        points: z.number().int(),
+        description: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createScoreRule(input);
+        return { id };
+      }),
+    updateRule: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        eventType: z.enum(["message_received", "link_clicked", "form_submitted", "purchase_completed", "friend_added", "rich_menu_tapped", "step_completed", "keyword_matched", "manual"]).optional(),
+        points: z.number().int().optional(),
+        description: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateScoreRule(id, data);
+        return { success: true };
+      }),
+    deleteRule: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteScoreRule(input.id);
+        return { success: true };
+      }),
+    addScore: protectedProcedure
+      .input(z.object({
+        friendId: z.number(),
+        clientId: z.number(),
+        eventType: z.string(),
+        points: z.number().int(),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.addFriendScore(input);
+        return { success: true };
+      }),
+    history: protectedProcedure
+      .input(z.object({ friendId: z.number() }))
+      .query(async ({ input }) => db.getFriendScoreHistory(input.friendId)),
+    ranking: protectedProcedure
+      .input(z.object({ clientId: z.number(), limit: z.number().optional() }))
+      .query(async ({ input }) => db.getScoreRanking(input.clientId, input.limit)),
+  }),
+
+  // ===== セグメント配信 =====
+  segmentBroadcast: router({
+    send: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        messageContent: z.string().min(1),
+        filters: z.object({
+          tags: z.array(z.string()).optional(),
+          minScore: z.number().optional(),
+          maxScore: z.number().optional(),
+          status: z.enum(["active", "blocked", "unfollowed"]).optional(),
+          sourceCode: z.string().optional(),
+        }),
+        usePersonalization: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const channel = await db.getLineChannel(input.clientId);
+        if (!channel?.channelAccessToken) throw new TRPCError({ code: "BAD_REQUEST", message: "LINEチャネルが設定されていません" });
+
+        const deliveryCfg = await db.getDeliverySettings(input.clientId);
+        const now = new Date();
+        const hour = now.getHours();
+        const startHour = deliveryCfg?.deliveryStartHour ?? 9;
+        const endHour = deliveryCfg?.deliveryEndHour ?? 23;
+        if (hour < startHour || hour >= endHour) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `配信時間外です（${startHour}:00〜${endHour}:00）` });
+        }
+
+        let targets = (await db.listFriends(input.clientId, {})).filter(f => f.status === (input.filters.status || "active"));
+        if (input.filters.tags?.length) {
+          targets = targets.filter(f => {
+            const tags = (f.tags as string[]) || [];
+            return input.filters.tags!.some(t => tags.includes(t));
+          });
+        }
+        if (input.filters.minScore !== undefined) targets = targets.filter(f => (f as any).score >= input.filters.minScore!);
+        if (input.filters.maxScore !== undefined) targets = targets.filter(f => (f as any).score <= input.filters.maxScore!);
+        if (input.filters.sourceCode) targets = targets.filter(f => (f as any).sourceCode === input.filters.sourceCode);
+
+        let sent = 0, failed = 0;
+        const batchSize = deliveryCfg?.batchSize ?? 50;
+        const batchInterval = deliveryCfg?.batchInterval ?? 3;
+        const stealthMode = deliveryCfg?.enableStealthMode ?? false;
+        const stealthMin = deliveryCfg?.stealthMinDelay ?? 1;
+        const stealthMax = deliveryCfg?.stealthMaxDelay ?? 5;
+
+        for (let i = 0; i < targets.length; i++) {
+          const friend = targets[i];
+          const msg = input.usePersonalization
+            ? db.expandPersonalizeVars(input.messageContent, friend as any)
+            : input.messageContent;
+          try {
+            if (stealthMode) {
+              const delay = Math.random() * (stealthMax - stealthMin) + stealthMin;
+              await new Promise(r => setTimeout(r, delay * 1000));
+            }
+            await fetch("https://api.line.me/v2/bot/message/push", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${channel.channelAccessToken}` },
+              body: JSON.stringify({ to: friend.lineUserId, messages: [{ type: "text", text: msg }] }),
+            });
+            sent++;
+          } catch { failed++; }
+          if ((i + 1) % batchSize === 0 && i < targets.length - 1) {
+            await new Promise(r => setTimeout(r, batchInterval * 1000));
+          }
+        }
+
+        await db.createMessageLog({
+          clientId: input.clientId, messageType: "broadcast",
+          recipientCount: targets.length, messageContent: input.messageContent,
+          status: failed === targets.length ? "failed" : "sent",
+        });
+
+        return { sent, failed, total: targets.length };
+      }),
+  }),
+
+  // ===== リマインダー =====
+  reminders: router({
+    list: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.listReminders(input.clientId)),
+    create: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        name: z.string().min(1),
+        eventDate: z.string(), // ISO date
+        messageContent: z.string().min(1),
+        reminderDays: z.array(z.number()),
+        targetTags: z.array(z.string()).optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createReminder({
+          ...input,
+          eventDate: new Date(input.eventDate),
+          reminderDays: input.reminderDays,
+          targetTags: input.targetTags,
+        });
+        return { id };
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        eventDate: z.string().optional(),
+        messageContent: z.string().optional(),
+        reminderDays: z.array(z.number()).optional(),
+        targetTags: z.array(z.string()).optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, eventDate, ...data } = input;
+        await db.updateReminder(id, { ...data, ...(eventDate ? { eventDate: new Date(eventDate) } : {}) } as any);
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteReminder(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ===== 予約 =====
+  bookings: router({
+    list: protectedProcedure
+      .input(z.object({ clientId: z.number(), status: z.string().optional() }))
+      .query(async ({ input }) => db.listBookings(input.clientId, input.status)),
+    create: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        friendId: z.number().optional(),
+        title: z.string().min(1),
+        description: z.string().optional(),
+        scheduledAt: z.string(),
+        duration: z.number().int().min(15).max(480).optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createBooking({ ...input, scheduledAt: new Date(input.scheduledAt) });
+        return { id };
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        scheduledAt: z.string().optional(),
+        duration: z.number().optional(),
+        status: z.enum(["confirmed", "pending", "cancelled", "completed"]).optional(),
+        notes: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, scheduledAt, ...data } = input;
+        await db.updateBooking(id, { ...data, ...(scheduledAt ? { scheduledAt: new Date(scheduledAt) } : {}) } as any);
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteBooking(input.id);
+        return { success: true };
+      }),
+    settings: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.getBookingSettings(input.clientId)),
+    saveSettings: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        googleCalendarId: z.string().optional(),
+        availableDays: z.array(z.number()).optional(),
+        availableStartTime: z.string().optional(),
+        availableEndTime: z.string().optional(),
+        slotDuration: z.number().optional(),
+        bufferTime: z.number().optional(),
+        maxAdvanceDays: z.number().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.upsertBookingSettings(input as any);
+        return { success: true };
+      }),
+  }),
+
+  // ===== Stripe 決済 =====
+  stripe: router({
+    settings: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => {
+        const s = await db.getStripeSettings(input.clientId);
+        if (!s) return { configured: false };
+        return { configured: !!s.stripeSecretKey, publishableKey: s.stripePublishableKey };
+      }),
+    saveSettings: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        stripeSecretKey: z.string().optional(),
+        stripePublishableKey: z.string().optional(),
+        stripeWebhookSecret: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await db.upsertStripeSettings(input);
+        return { success: true };
+      }),
+    listPlans: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.listPaymentPlans(input.clientId)),
+    createPlan: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        name: z.string().min(1),
+        description: z.string().optional(),
+        amount: z.number().int().min(0),
+        currency: z.string().default("jpy"),
+        interval: z.enum(["one_time", "monthly", "yearly"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createPaymentPlan(input);
+        return { id };
+      }),
+    updatePlan: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        amount: z.number().optional(),
+        interval: z.enum(["one_time", "monthly", "yearly"]).optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updatePaymentPlan(id, data);
+        return { success: true };
+      }),
+    deletePlan: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deletePaymentPlan(input.id);
+        return { success: true };
+      }),
+    listPayments: protectedProcedure
+      .input(z.object({ clientId: z.number(), limit: z.number().optional() }))
+      .query(async ({ input }) => db.listPayments(input.clientId, input.limit)),
+    stats: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.getPaymentStats(input.clientId)),
+  }),
+
+  // ===== クリック計測 =====
+  tracking: router({
+    listLinks: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.listTrackingLinks(input.clientId)),
+    createLink: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        name: z.string().min(1),
+        originalUrl: z.string().url(),
+        autoTag: z.string().optional(),
+        triggerScenarioId: z.number().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const shortCode = nanoid(8);
+        const id = await db.createTrackingLink({ ...input, shortCode });
+        return { id, shortCode };
+      }),
+    updateLink: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        originalUrl: z.string().optional(),
+        autoTag: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateTrackingLink(id, data);
+        return { success: true };
+      }),
+    deleteLink: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteTrackingLink(input.id);
+        return { success: true };
+      }),
+    clickStats: protectedProcedure
+      .input(z.object({ trackingLinkId: z.number() }))
+      .query(async ({ input }) => db.getClickStats(input.trackingLinkId)),
+  }),
+
+  // ===== IF-THEN 自動化ルール =====
+  automation: router({
+    list: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.listAutomationRules(input.clientId)),
+    create: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        name: z.string().min(1),
+        description: z.string().optional(),
+        triggerType: z.enum(["friend_added", "keyword_received", "tag_added", "tag_removed", "score_reached", "link_clicked", "form_submitted"]),
+        triggerConfig: z.any(),
+        actionType: z.enum(["send_message", "add_tag", "remove_tag", "add_score", "start_scenario", "send_rich_menu"]),
+        actionConfig: z.any(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createAutomationRule(input);
+        return { id };
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        triggerType: z.enum(["friend_added", "keyword_received", "tag_added", "tag_removed", "score_reached", "link_clicked", "form_submitted"]).optional(),
+        triggerConfig: z.any().optional(),
+        actionType: z.enum(["send_message", "add_tag", "remove_tag", "add_score", "start_scenario", "send_rich_menu"]).optional(),
+        actionConfig: z.any().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateAutomationRule(id, data);
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteAutomationRule(input.id);
+        return { success: true };
+      }),
+    logs: protectedProcedure
+      .input(z.object({ ruleId: z.number(), limit: z.number().optional() }))
+      .query(async ({ input }) => db.listAutomationLogs(input.ruleId, input.limit)),
+  }),
+
+  // ===== LIFFフォーム =====
+  liffForms: router({
+    list: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.listLiffForms(input.clientId)),
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => db.getLiffFormById(input.id)),
+    create: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        name: z.string().min(1),
+        description: z.string().optional(),
+        fields: z.any(),
+        thankYouMessage: z.string().optional(),
+        autoTag: z.string().optional(),
+        autoScenarioId: z.number().optional(),
+        liffId: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createLiffForm(input);
+        return { id };
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        fields: z.any().optional(),
+        thankYouMessage: z.string().optional(),
+        autoTag: z.string().optional(),
+        liffId: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateLiffForm(id, data);
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteLiffForm(input.id);
+        return { success: true };
+      }),
+    submissions: protectedProcedure
+      .input(z.object({ formId: z.number(), limit: z.number().optional() }))
+      .query(async ({ input }) => db.listFormSubmissions(input.formId, input.limit)),
+    submit: publicProcedure
+      .input(z.object({
+        formId: z.number(),
+        lineUserId: z.string().optional(),
+        data: z.any(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createFormSubmission(input);
+        return { id };
+      }),
+  }),
+
+  // ===== オペレーターチャット =====
+  operatorChat: router({
+    friendList: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.getChatFriendList(input.clientId)),
+    messages: protectedProcedure
+      .input(z.object({ clientId: z.number(), friendId: z.number(), limit: z.number().optional() }))
+      .query(async ({ input }) => {
+        await db.markChatsRead(input.clientId, input.friendId);
+        return db.listOperatorChats(input.clientId, input.friendId, input.limit);
+      }),
+    send: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        friendId: z.number(),
+        messageContent: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const friend = await db.getFriendById(input.friendId);
+        if (!friend) throw new TRPCError({ code: "NOT_FOUND", message: "友だちが見つかりません" });
+        const channel = await db.getLineChannel(input.clientId);
+        if (!channel?.channelAccessToken) throw new TRPCError({ code: "BAD_REQUEST", message: "LINEチャネルが設定されていません" });
+
+        // LINE APIで送信
+        try {
+          await fetch("https://api.line.me/v2/bot/message/push", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${channel.channelAccessToken}` },
+            body: JSON.stringify({ to: friend.lineUserId, messages: [{ type: "text", text: input.messageContent }] }),
+          });
+        } catch (err) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "メッセージ送信に失敗しました" });
+        }
+
+        const id = await db.createOperatorChat({
+          clientId: input.clientId,
+          friendId: input.friendId,
+          lineUserId: friend.lineUserId,
+          direction: "outgoing",
+          messageContent: input.messageContent,
+          operatorUserId: ctx.user.id,
+        });
+        return { id };
+      }),
+    unread: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => {
+        const unread = await db.getUnreadChats(input.clientId);
+        return { count: unread.length };
+      }),
+  }),
+
+  // ===== アフィリエイト =====
+  affiliates: router({
+    list: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.listAffiliates(input.clientId)),
+    create: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        name: z.string().min(1),
+        code: z.string().min(3).max(64),
+        commissionRate: z.number().int().min(0).max(100).optional(),
+        fixedCommission: z.number().int().min(0).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const existing = await db.getAffiliateByCode(input.code);
+        if (existing) throw new TRPCError({ code: "CONFLICT", message: "このコードは既に使用されています" });
+        const id = await db.createAffiliate(input);
+        return { id };
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        commissionRate: z.number().optional(),
+        fixedCommission: z.number().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateAffiliate(id, data);
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteAffiliate(input.id);
+        return { success: true };
+      }),
+    referrals: protectedProcedure
+      .input(z.object({ affiliateId: z.number() }))
+      .query(async ({ input }) => db.listAffiliateReferrals(input.affiliateId)),
+  }),
+
+  // ===== BAN検知・アカウント健全性 =====
+  accountHealth: router({
+    get: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => {
+        const health = await db.getAccountHealth(input.clientId);
+        return health || { status: "normal", dailyMessageCount: 0, dailyBlockCount: 0, blockRate: 0 };
+      }),
+    refresh: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .mutation(async ({ input }) => {
+        const allFriends = await db.listFriends(input.clientId, {});
+        const active = allFriends.filter(f => f.status === "active").length;
+        const blocked = allFriends.filter(f => f.status === "blocked").length;
+        const blockRate = active + blocked > 0 ? Math.round((blocked / (active + blocked)) * 10000) : 0;
+
+        let status: "normal" | "warning" | "danger" = "normal";
+        if (blockRate >= 500) status = "danger"; // 5%以上
+        else if (blockRate >= 200) status = "warning"; // 2%以上
+
+        await db.upsertAccountHealth({
+          clientId: input.clientId,
+          status,
+          dailyBlockCount: blocked,
+          blockRate,
+          warningMessage: status === "danger"
+            ? "ブロック率が高すぎます。配信頻度や内容を見直してください。"
+            : status === "warning"
+              ? "ブロック率がやや高めです。注意してください。"
+              : null,
+        });
+
+        return { status, blockRate: blockRate / 100, blocked, active };
+      }),
+  }),
+
+  // ===== コンバージョン =====
+  conversions: router({
+    listPoints: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.listConversionPoints(input.clientId)),
+    createPoint: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        name: z.string().min(1),
+        description: z.string().optional(),
+        eventType: z.string().min(1),
+        value: z.number().int().min(0).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createConversionPoint(input);
+        return { id };
+      }),
+    updatePoint: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        eventType: z.string().optional(),
+        value: z.number().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateConversionPoint(id, data);
+        return { success: true };
+      }),
+    deletePoint: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteConversionPoint(input.id);
+        return { success: true };
+      }),
+    recordEvent: protectedProcedure
+      .input(z.object({
+        conversionPointId: z.number(),
+        clientId: z.number(),
+        friendId: z.number().optional(),
+        lineUserId: z.string().optional(),
+        value: z.number().optional(),
+        metadata: z.any().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.recordConversionEvent(input);
+        return { id };
+      }),
+    events: protectedProcedure
+      .input(z.object({ clientId: z.number(), limit: z.number().optional() }))
+      .query(async ({ input }) => db.listConversionEvents(input.clientId, input.limit)),
+    stats: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.getConversionStats(input.clientId)),
+  }),
+
+  // ===== 配信設定（時間制限・ステルス） =====
+  deliverySettings: router({
+    get: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => {
+        const s = await db.getDeliverySettings(input.clientId);
+        return s || {
+          deliveryStartHour: 9, deliveryEndHour: 23,
+          enableStealthMode: false, stealthMinDelay: 1, stealthMaxDelay: 5,
+          batchSize: 50, batchInterval: 3,
+        };
+      }),
+    save: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        deliveryStartHour: z.number().int().min(0).max(23),
+        deliveryEndHour: z.number().int().min(1).max(24),
+        enableStealthMode: z.boolean(),
+        stealthMinDelay: z.number().min(0).max(60),
+        stealthMaxDelay: z.number().min(0).max(120),
+        batchSize: z.number().int().min(1).max(500),
+        batchInterval: z.number().int().min(0).max(60),
+      }))
+      .mutation(async ({ input }) => {
+        await db.upsertDeliverySettings(input);
+        return { success: true };
+      }),
+  }),
+
+  // ===== Webhook IN/OUT =====
+  webhooks: router({
+    list: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.listWebhookEndpoints(input.clientId)),
+    create: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        name: z.string().min(1),
+        direction: z.enum(["inbound", "outbound"]),
+        url: z.string(),
+        secret: z.string().optional(),
+        eventTypes: z.array(z.string()),
+      }))
+      .mutation(async ({ input }) => {
+        const data = { ...input, secret: input.secret || nanoid(32) };
+        if (input.direction === "inbound") {
+          (data as any).url = `/api/webhook/custom/${nanoid(16)}`;
+        }
+        const id = await db.createWebhookEndpoint(data);
+        return { id };
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        url: z.string().optional(),
+        eventTypes: z.array(z.string()).optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateWebhookEndpoint(id, data);
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteWebhookEndpoint(input.id);
+        return { success: true };
+      }),
+    logs: protectedProcedure
+      .input(z.object({ endpointId: z.number(), limit: z.number().optional() }))
+      .query(async ({ input }) => db.listWebhookLogs(input.endpointId, input.limit)),
+  }),
+
+  // ===== 友だち経路追跡 =====
+  friendSources: router({
+    list: protectedProcedure
+      .input(z.object({ clientId: z.number() }))
+      .query(async ({ input }) => db.listFriendSources(input.clientId)),
+    create: protectedProcedure
+      .input(z.object({
+        clientId: z.number(),
+        name: z.string().min(1),
+        code: z.string().min(2).max(64),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const id = await db.createFriendSource(input);
+        return { id };
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await db.updateFriendSource(id, data);
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await db.deleteFriendSource(input.id);
+        return { success: true };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
