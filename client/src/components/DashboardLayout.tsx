@@ -376,11 +376,7 @@ function LoginForm() {
         return;
       }
 
-      if (mode === "register") {
-        setMode("registered");
-        return;
-      }
-
+      // Registration auto-verifies, reload to enter dashboard
       window.location.reload();
     } catch {
       toast.error("通信エラーが発生しました");
