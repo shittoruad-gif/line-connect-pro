@@ -800,7 +800,7 @@ If no clear date/time is found, return empty string for parsedDateTime.`,
               content: [
                 {
                   type: "image_url",
-                  image_url: { url: input.imageUrl, detail: "high" },
+                  image_url: { url: input.imageUrl },
                 },
                 {
                   type: "text",
@@ -809,25 +809,7 @@ If no clear date/time is found, return empty string for parsedDateTime.`,
               ],
             },
           ],
-          response_format: {
-            type: "json_schema",
-            json_schema: {
-              name: "line_extraction",
-              strict: true,
-              schema: {
-                type: "object",
-                properties: {
-                  groupName: { type: "string" },
-                  dateTimeText: { type: "string" },
-                  parsedDateTime: { type: "string" },
-                  confidence: { type: "string", enum: ["high", "medium", "low"] },
-                  notes: { type: "string" },
-                },
-                required: ["groupName", "dateTimeText", "parsedDateTime", "confidence", "notes"],
-                additionalProperties: false,
-              },
-            },
-          },
+          response_format: { type: "json_object" },
         });
 
         const content = response.choices[0].message.content;

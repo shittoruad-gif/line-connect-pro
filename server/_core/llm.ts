@@ -212,7 +212,7 @@ const normalizeToolChoice = (
 const resolveApiUrl = () =>
   ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
     ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
+    : "https://api.groq.com/openai/v1/chat/completions";
 
 const assertApiKey = () => {
   if (!ENV.forgeApiKey) {
@@ -280,7 +280,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: Record<string, unknown> = {
-    model: "gemini-2.0-flash",
+    model: "llama-3.2-90b-vision-preview",
     messages: messages.map(normalizeMessage),
   };
 
