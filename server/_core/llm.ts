@@ -212,7 +212,7 @@ const normalizeToolChoice = (
 const resolveApiUrl = () =>
   ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
     ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://api.openai.com/v1/chat/completions";
+    : "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
 const assertApiKey = () => {
   if (!ENV.forgeApiKey) {
@@ -280,7 +280,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: Record<string, unknown> = {
-    model: "gpt-4o-mini",
+    model: "gemini-2.0-flash",
     messages: messages.map(normalizeMessage),
   };
 
