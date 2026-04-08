@@ -118,7 +118,7 @@ export default function ZoomHome() {
       const { url } = await uploadMutation.mutateAsync({ base64, contentType: file.type, filename: file.name });
       setUploadedUrl(url);
       toast.info("スクリーンショットを解析中...");
-      const result = await ocrMutation.mutateAsync({ imageUrl: url });
+      const result = await ocrMutation.mutateAsync({ base64, contentType: file.type });
       setOcrResult(result);
       setEditTitle(result.title);
       setEditDuration(appSettings?.defaultDuration ?? 60);

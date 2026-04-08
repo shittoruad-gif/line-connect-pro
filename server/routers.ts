@@ -694,8 +694,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const buffer = Buffer.from(input.base64, "base64");
         const key = `screenshots/${ctx.user.id}/${nanoid(8)}-${input.filename}`;
-        const { url } = await storagePut(key, buffer, input.contentType);
-        return { url };
+        await storagePut(key, buffer, input.contentType);
+        // Return lightweight public URL for client (not data URL)
+        return { url: `/uploads/${key}` };
       }),
   }),
 
@@ -768,11 +769,15 @@ export const appRouter = router({
   ocr: router({
     analyze: protectedProcedure
       .input(z.object({
-        imageUrl: z.string().url(),
+        base64: z.string(),
+        contentType: z.string().default("image/png"),
       }))
       .mutation(async ({ ctx, input }) => {
         const settings = await db.getAppSettings(ctx.user.id);
         const titleSuffix = settings?.titleSuffix ?? "様広告MTG";
+
+        // Build data URL server-side only for LLM (never sent to client)
+        const dataUrl = `data:${input.contentType};base64,${input.base64}`;
 
         const response = await invokeLLM({
           messages: [
@@ -800,7 +805,7 @@ If no clear date/time is found, return empty string for parsedDateTime.`,
               content: [
                 {
                   type: "image_url",
-                  image_url: { url: input.imageUrl },
+                  image_url: { url: dataUrl },
                 },
                 {
                   type: "text",

@@ -19,7 +19,7 @@ export async function storagePut(
   relKey: string,
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream"
-): Promise<{ key: string; url: string }> {
+): Promise<{ key: string; url: string; dataUrl: string }> {
   ensureUploadDir();
   const key = normalizeKey(relKey);
   const filePath = join(UPLOAD_DIR, key);
@@ -33,10 +33,11 @@ export async function storagePut(
   const buffer = typeof data === "string" ? Buffer.from(data) : Buffer.from(data);
   writeFileSync(filePath, buffer);
 
-  // Return a data URL so OpenAI Vision API can access it directly
+  // Return both a lightweight served URL (for client) and a data URL (for LLM)
   const base64 = buffer.toString("base64");
-  const url = `data:${contentType};base64,${base64}`;
-  return { key, url };
+  const dataUrl = `data:${contentType};base64,${base64}`;
+  const url = `/uploads/${key}`;
+  return { key, url, dataUrl };
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
