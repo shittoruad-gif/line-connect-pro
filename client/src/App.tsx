@@ -9,6 +9,7 @@ import DashboardLayout from "./components/DashboardLayout";
 import ZoomHome from "./pages/ZoomHome";
 import ZoomHistory from "./pages/ZoomHistory";
 import ZoomSettingsPage from "./pages/ZoomSettings";
+import AppSettingsPage from "./pages/AppSettingsPage";
 import InvitationTemplatePage from "./pages/InvitationTemplatePage";
 import LandingPage from "./pages/Landing";
 import { LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage } from "./pages/AuthPages";
@@ -27,7 +28,7 @@ function AdminRouter() {
         <Route path="/zoom-history" component={ZoomHistory} />
         <Route path="/zoom-settings" component={ZoomSettingsPage} />
         <Route path="/invitation-template" component={InvitationTemplatePage} />
-        <Route path="/app-settings" component={ZoomSettingsPage} />
+        <Route path="/app-settings" component={AppSettingsPage} />
         <Route path="/passcodes" component={PasscodeManagement} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
