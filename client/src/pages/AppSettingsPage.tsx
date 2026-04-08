@@ -112,7 +112,7 @@ export default function AppSettingsPage() {
                     <button
                       key={d}
                       onClick={() => { setDefaultDuration(d); mark(); }}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors
+                      className={`px-3 py-2 rounded-lg text-xs sm:text-sm font-medium border transition-colors
                         ${defaultDuration === d
                           ? "bg-primary text-primary-foreground border-primary"
                           : "bg-background text-foreground border-border hover:border-primary/50"

@@ -280,7 +280,7 @@ export default function ZoomHome() {
                 <Label htmlFor="manual-title" className="text-sm font-medium">タイトル（カスタム、空欄で自動生成）</Label>
                 <Input id="manual-title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder={editClientName ? `${editClientName}${appSettings?.titleSuffix ?? "様広告MTG"}` : "自動生成されます"} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="manual-datetime" className="text-sm font-medium flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />開始日時 <span className="text-destructive">*</span></Label>
                   <Input id="manual-datetime" type="datetime-local" value={editDateTime} onChange={(e) => setEditDateTime(e.target.value)} />
@@ -365,7 +365,7 @@ export default function ZoomHome() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-muted/40 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl bg-muted/40 text-sm">
                 <div><p className="text-xs text-muted-foreground mb-1">グループ名</p><p className="font-medium text-foreground">{ocrResult.groupName || "—"}</p></div>
                 <div><p className="text-xs text-muted-foreground mb-1">抽出された日時</p><p className="font-medium text-foreground">{ocrResult.dateTimeText || "—"}</p></div>
               </div>
@@ -375,7 +375,7 @@ export default function ZoomHome() {
                   <Label htmlFor="title" className="text-sm font-medium">ミーティングタイトル</Label>
                   <Input id="title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="〇〇様広告MTG" className="font-medium" disabled={step === "result"} />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="datetime" className="text-sm font-medium flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />開始日時</Label>
                     <Input id="datetime" type="datetime-local" value={editDateTime} onChange={(e) => setEditDateTime(e.target.value)} disabled={step === "result"} />
@@ -411,7 +411,7 @@ export default function ZoomHome() {
               <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
                 <p className="text-xs text-muted-foreground mb-1">ミーティングタイトル</p>
                 <p className="font-semibold text-foreground text-lg">{meetingResult.title}</p>
-                <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{new Date(meetingResult.scheduledAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</span>
                   <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{meetingResult.duration}分</span>
                 </div>
@@ -438,16 +438,16 @@ export default function ZoomHome() {
               <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
                 <span>ミーティングID: <span className="font-mono">{meetingResult.zoomMeetingId}</span></span>
               </div>
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <Button variant="outline" className="gap-2" onClick={() => {
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <Button variant="outline" className="gap-2 text-xs sm:text-sm" onClick={() => {
                   const text = `【${meetingResult.title}】\n日時: ${new Date(meetingResult.scheduledAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}\n参加URL: ${meetingResult.joinUrl}\nパスワード: ${meetingResult.password}`;
                   navigator.clipboard.writeText(text); toast.success("ミーティング情報をコピーしました");
-                }}><Copy className="w-4 h-4" />全情報をコピー</Button>
-                <Button variant="outline" className="gap-2" onClick={handleGenerateInvitation} disabled={renderInvitationMutation.isPending}>
-                  {renderInvitationMutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" />生成中...</> : <><Mail className="w-4 h-4" />招待文を生成</>}
+                }}><Copy className="w-4 h-4 shrink-0" />全情報をコピー</Button>
+                <Button variant="outline" className="gap-2 text-xs sm:text-sm" onClick={handleGenerateInvitation} disabled={renderInvitationMutation.isPending}>
+                  {renderInvitationMutation.isPending ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" />生成中...</> : <><Mail className="w-4 h-4 shrink-0" />招待文を生成</>}
                 </Button>
-                <Button variant="outline" className="gap-2" onClick={handleAddToCalendar}><CalendarPlus className="w-4 h-4" />Googleカレンダーに追加</Button>
-                <Button className="gap-2" onClick={handleReset}><Zap className="w-4 h-4" />新しく発行する</Button>
+                <Button variant="outline" className="gap-2 text-xs sm:text-sm" onClick={handleAddToCalendar}><CalendarPlus className="w-4 h-4 shrink-0" />Googleカレンダーに追加</Button>
+                <Button className="gap-2 text-xs sm:text-sm" onClick={handleReset}><Zap className="w-4 h-4 shrink-0" />新しく発行する</Button>
               </div>
             </CardContent>
           </Card>
@@ -465,8 +465,8 @@ export default function ZoomHome() {
             <div className="p-4 rounded-xl bg-muted/40 border border-border max-h-80 overflow-y-auto">
               <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed">{invitationText}</pre>
             </div>
-            <div className="flex gap-3 mt-4">
-              <Button className="flex-1 gap-2" onClick={async () => {
+            <div className="flex flex-col sm:flex-row gap-3 mt-4">
+              <Button className="flex-1 gap-2 text-sm" onClick={async () => {
                 if (!invitationText) return;
                 await navigator.clipboard.writeText(invitationText);
                 setInvitationCopied(true); setTimeout(() => setInvitationCopied(false), 2000);
@@ -474,7 +474,7 @@ export default function ZoomHome() {
               }}>
                 {invitationCopied ? <><Check className="w-4 h-4 text-green-400" />コピー済み</> : <><Copy className="w-4 h-4" />招待文をコピー</>}
               </Button>
-              <Button variant="outline" onClick={() => window.location.href = "/invitation-template"} className="gap-2">テンプレートを編集</Button>
+              <Button variant="outline" onClick={() => window.location.href = "/invitation-template"} className="gap-2 text-sm">テンプレートを編集</Button>
             </div>
           </div>
         </DialogContent>

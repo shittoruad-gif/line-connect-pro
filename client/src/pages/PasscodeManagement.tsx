@@ -69,7 +69,7 @@ export default function PasscodeManagement() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-[150px]">
               <label className="text-sm text-muted-foreground mb-1 block">コード</label>
               <Input
                 placeholder="例: ZOOM-FREE-2026"
@@ -118,14 +118,14 @@ export default function PasscodeManagement() {
         <CardHeader>
           <CardTitle className="text-base">パスコード一覧</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>コード</TableHead>
-                <TableHead>プラン</TableHead>
+                <TableHead className="hidden sm:table-cell">プラン</TableHead>
                 <TableHead>使用数</TableHead>
-                <TableHead>ステータス</TableHead>
+                <TableHead className="hidden sm:table-cell">ステータス</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
@@ -140,13 +140,13 @@ export default function PasscodeManagement() {
                       </button>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <Badge variant={pc.plan === "lifetime" ? "default" : "secondary"}>
                       {pc.plan === "lifetime" ? "永年無料" : "有料"}
                     </Badge>
                   </TableCell>
                   <TableCell>{pc.currentUses} / {pc.maxUses}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <Badge variant={pc.isActive ? "default" : "outline"}>
                       {pc.isActive ? "有効" : "無効"}
                     </Badge>

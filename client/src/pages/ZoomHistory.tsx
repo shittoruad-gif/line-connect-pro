@@ -180,7 +180,7 @@ export default function ZoomHistory() {
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-28 sm:w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -221,8 +221,8 @@ export default function ZoomHistory() {
           <div className="space-y-3">
             {filtered.map((meeting) => (
               <Card key={meeting.id} className="border-border shadow-sm hover:shadow-md transition-shadow">
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between gap-4">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-2 sm:gap-4">
                     <div className="flex-1 min-w-0 space-y-3">
                       {/* Title + Status */}
                       <div className="flex items-center gap-2 flex-wrap">
