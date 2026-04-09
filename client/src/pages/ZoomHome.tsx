@@ -53,6 +53,30 @@ function toBase64(file: File): Promise<string> {
   });
 }
 
+/** Resize image to max 1200px and compress as JPEG to reduce upload size */
+function resizeImage(file: File, maxSize = 1200): Promise<{ base64: string; contentType: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxSize || height > maxSize) {
+        const ratio = Math.min(maxSize / width, maxSize / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      resolve({ base64: dataUrl.split(",")[1], contentType: "image/jpeg" });
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
@@ -118,7 +142,9 @@ export default function ZoomHome() {
       const { url } = await uploadMutation.mutateAsync({ base64, contentType: file.type, filename: file.name });
       setUploadedUrl(url);
       toast.info("スクリーンショットを解析中...");
-      const result = await ocrMutation.mutateAsync({ base64, contentType: file.type });
+      // Resize for OCR to reduce payload size (max 1200px, JPEG 85%)
+      const resized = await resizeImage(file);
+      const result = await ocrMutation.mutateAsync({ base64: resized.base64, contentType: resized.contentType });
       setOcrResult(result);
       setEditTitle(result.title);
       setEditDuration(appSettings?.defaultDuration ?? 60);
