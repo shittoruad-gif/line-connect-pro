@@ -44,43 +44,72 @@ type MeetingResult = {
   clientName: string;
 };
 
-function toBase64(file: File): Promise<string> {
+/** Resize image to max 1200px and compress as JPEG to reduce upload size.
+ *  Also converts HEIC/PNG/etc. to JPEG so vision APIs accept it. */
+function resizeImage(file: File, maxSize = 1200): Promise<{ base64: string; contentType: string }> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
-    reader.onerror = reject;
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        let { width, height } = img;
+        if (!width || !height) throw new Error("画像サイズを取得できません");
+        if (width > maxSize || height > maxSize) {
+          const ratio = Math.min(maxSize / width, maxSize / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Canvas 2Dコンテキストを取得できません");
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        const comma = dataUrl.indexOf(",");
+        if (comma < 0) throw new Error("画像のエンコードに失敗しました");
+        resolve({ base64: dataUrl.slice(comma + 1), contentType: "image/jpeg" });
+      } catch (e) {
+        reject(e);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("画像の読み込みに失敗しました。別の画像をお試しください。"));
+    };
+    img.src = objectUrl;
   });
 }
 
-/** Resize image to max 1200px and compress as JPEG to reduce upload size */
-function resizeImage(file: File, maxSize = 1200): Promise<{ base64: string; contentType: string }> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      let { width, height } = img;
-      if (width > maxSize || height > maxSize) {
-        const ratio = Math.min(maxSize / width, maxSize / height);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-      resolve({ base64: dataUrl.split(",")[1], contentType: "image/jpeg" });
-    };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
-  });
+async function safeCopy(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    // Fallback for insecure contexts or older browsers
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
+    const ok = await safeCopy(text);
+    if (!ok) { toast.error("コピーに失敗しました"); return; }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -130,21 +159,39 @@ export default function ZoomHome() {
   const renderInvitationMutation = trpc.invitationTemplates.render.useMutation();
 
   const handleFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith("image/")) { toast.error("画像ファイルを選択してください"); return; }
+    if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) {
+      toast.error("画像ファイルを選択してください"); return;
+    }
     setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    // Revoke previous preview URL to avoid memory leak
+    setImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(file); });
     setOcrResult(null);
     setMeetingResult(null);
     setStep("ocr");
 
     try {
-      const base64 = await toBase64(file);
-      const { url } = await uploadMutation.mutateAsync({ base64, contentType: file.type, filename: file.name });
-      setUploadedUrl(url);
-      toast.info("スクリーンショットを解析中...");
-      // Resize for OCR to reduce payload size (max 1200px, JPEG 85%)
+      // Resize once, then use the same payload for BOTH upload and OCR.
+      // This keeps the network payload small and avoids "request aborted"
+      // errors on mobile from large multi-megabyte screenshots.
       const resized = await resizeImage(file);
-      const result = await ocrMutation.mutateAsync({ base64: resized.base64, contentType: resized.contentType });
+
+      // Upload (best-effort: we still proceed to OCR even if upload fails)
+      try {
+        const { url } = await uploadMutation.mutateAsync({
+          base64: resized.base64,
+          contentType: resized.contentType,
+          filename: file.name.replace(/\.(png|heic|heif|webp)$/i, ".jpg"),
+        });
+        setUploadedUrl(url);
+      } catch (uploadErr) {
+        console.warn("[Upload] screenshot save failed, continuing with OCR:", uploadErr);
+      }
+
+      toast.info("スクリーンショットを解析中...");
+      const result = await ocrMutation.mutateAsync({
+        base64: resized.base64,
+        contentType: resized.contentType,
+      });
       setOcrResult(result);
       setEditTitle(result.title);
       setEditDuration(appSettings?.defaultDuration ?? 60);
@@ -154,15 +201,20 @@ export default function ZoomHome() {
           const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
           setEditDateTime(local.toISOString().slice(0, 16));
         }
-      } else {
+      }
+      if (!result.parsedDateTime || isNaN(new Date(result.parsedDateTime).getTime())) {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setMinutes(0, 0, 0);
+        tomorrow.setHours(10, 0, 0, 0);
         const local = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000);
         setEditDateTime(local.toISOString().slice(0, 16));
       }
       setStep("confirm");
-      toast.success("解析完了！内容を確認してください");
+      if (result.groupName) {
+        toast.success("解析完了！内容を確認してください");
+      } else {
+        toast.info("グループ名を自動検出できませんでした。手動で入力してください");
+      }
     } catch (err: any) {
       toast.error("解析に失敗しました: " + (err?.message ?? "不明なエラー"));
       setStep("upload");
@@ -241,7 +293,9 @@ export default function ZoomHome() {
   };
 
   const handleReset = () => {
-    setImageFile(null); setImagePreview(null); setUploadedUrl(null);
+    setImageFile(null);
+    setImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+    setUploadedUrl(null);
     setOcrResult(null); setMeetingResult(null);
     setEditTitle(""); setEditDateTime(""); setEditDuration(60);
     setEditClientName(""); setStep("upload");
@@ -465,9 +519,11 @@ export default function ZoomHome() {
                 <span>ミーティングID: <span className="font-mono">{meetingResult.zoomMeetingId}</span></span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                <Button variant="outline" className="gap-2 text-xs sm:text-sm" onClick={() => {
+                <Button variant="outline" className="gap-2 text-xs sm:text-sm" onClick={async () => {
                   const text = `【${meetingResult.title}】\n日時: ${new Date(meetingResult.scheduledAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}\n参加URL: ${meetingResult.joinUrl}\nパスワード: ${meetingResult.password}`;
-                  navigator.clipboard.writeText(text); toast.success("ミーティング情報をコピーしました");
+                  const ok = await safeCopy(text);
+                  if (ok) toast.success("ミーティング情報をコピーしました");
+                  else toast.error("コピーに失敗しました");
                 }}><Copy className="w-4 h-4 shrink-0" />全情報をコピー</Button>
                 <Button variant="outline" className="gap-2 text-xs sm:text-sm" onClick={handleGenerateInvitation} disabled={renderInvitationMutation.isPending}>
                   {renderInvitationMutation.isPending ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" />生成中...</> : <><Mail className="w-4 h-4 shrink-0" />招待文を生成</>}
@@ -494,7 +550,8 @@ export default function ZoomHome() {
             <div className="flex flex-col sm:flex-row gap-3 mt-4">
               <Button className="flex-1 gap-2 text-sm" onClick={async () => {
                 if (!invitationText) return;
-                await navigator.clipboard.writeText(invitationText);
+                const ok = await safeCopy(invitationText);
+                if (!ok) { toast.error("コピーに失敗しました"); return; }
                 setInvitationCopied(true); setTimeout(() => setInvitationCopied(false), 2000);
                 toast.success("招待文をコピーしました");
               }}>

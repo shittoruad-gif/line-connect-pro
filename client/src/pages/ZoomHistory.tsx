@@ -36,10 +36,31 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
+async function safeCopy(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
+    const ok = await safeCopy(text);
+    if (!ok) { toast.error("コピーに失敗しました"); return; }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -336,7 +357,8 @@ export default function ZoomHistory() {
             <div className="flex gap-3 mt-4">
               <Button className="flex-1 gap-2" onClick={async () => {
                 if (!invitationText) return;
-                await navigator.clipboard.writeText(invitationText);
+                const ok = await safeCopy(invitationText);
+                if (!ok) { toast.error("コピーに失敗しました"); return; }
                 setInvitationCopied(true);
                 setTimeout(() => setInvitationCopied(false), 2000);
                 toast.success("招待文をコピーしました");

@@ -47,9 +47,23 @@ export default function PasscodeManagement() {
     onError: (err) => toast.error(err.message),
   });
 
-  const copyCode = (code: string) => {
-    navigator.clipboard.writeText(code);
-    toast.success(`コピーしました: ${code}`);
+  const copyCode = async (code: string) => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(code);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = code;
+        ta.style.position = "fixed"; ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      toast.success(`コピーしました: ${code}`);
+    } catch {
+      toast.error("コピーに失敗しました");
+    }
   };
 
   return (

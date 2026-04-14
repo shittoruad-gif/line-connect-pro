@@ -769,8 +769,8 @@ export const appRouter = router({
   ocr: router({
     analyze: protectedProcedure
       .input(z.object({
-        base64: z.string(),
-        contentType: z.string().default("image/png"),
+        base64: z.string().min(1),
+        contentType: z.string().default("image/jpeg"),
       }))
       .mutation(async ({ ctx, input }) => {
         const settings = await db.getAppSettings(ctx.user.id);
@@ -779,11 +779,13 @@ export const appRouter = router({
         // Build data URL server-side only for LLM (never sent to client)
         const dataUrl = `data:${input.contentType};base64,${input.base64}`;
 
-        const response = await invokeLLM({
-          messages: [
-            {
-              role: "system",
-              content: `You are an expert at reading LINE group chat screenshots in Japanese.
+        let response;
+        try {
+          response = await invokeLLM({
+            messages: [
+              {
+                role: "system",
+                content: `You are an expert at reading LINE group chat screenshots in Japanese.
 Extract the following information from the screenshot:
 1. Group name (グループ名): The name shown at the top of the LINE chat screen
 2. Meeting date and time (日時): Any date/time mentioned in the messages (e.g., "3月15日 14:00", "来週月曜 15時")
@@ -799,37 +801,101 @@ Return ONLY valid JSON in this exact format:
 
 For parsedDateTime, assume the current year is 2026. Convert relative dates like "来週月曜" to actual dates.
 If no clear date/time is found, return empty string for parsedDateTime.`,
-            },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "image_url",
-                  image_url: { url: dataUrl },
-                },
-                {
-                  type: "text",
-                  text: "このLINEのスクリーンショットからグループ名と日時を抽出してください。",
-                },
-              ],
-            },
-          ],
-          response_format: { type: "json_object" },
-        });
+              },
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "image_url",
+                    image_url: { url: dataUrl },
+                  },
+                  {
+                    type: "text",
+                    text: "このLINEのスクリーンショットからグループ名と日時を抽出してください。",
+                  },
+                ],
+              },
+            ],
+            response_format: { type: "json_object" },
+          });
+        } catch (err: any) {
+          console.error("[OCR] LLM invocation failed:", err?.message ?? err);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "画像解析APIの呼び出しに失敗しました。手動入力モードをお試しください。",
+          });
+        }
 
-        const content = response.choices[0].message.content;
-        const parsed = typeof content === "string" ? JSON.parse(content) : content;
+        // Defensive extraction of the model reply
+        const rawContent = response?.choices?.[0]?.message?.content;
+        let textContent = "";
+        if (typeof rawContent === "string") {
+          textContent = rawContent;
+        } else if (Array.isArray(rawContent)) {
+          textContent = rawContent
+            .map(p => (p && (p as any).type === "text" ? (p as any).text : ""))
+            .join("");
+        }
 
-        const groupName = parsed.groupName ?? "";
+        if (!textContent) {
+          console.error("[OCR] Empty response from LLM");
+          // Return empty result so the user can fill in manually
+          return {
+            groupName: "",
+            dateTimeText: "",
+            parsedDateTime: "",
+            title: "",
+            confidence: "low" as const,
+            notes: "AI解析で内容を取得できませんでした。手動で入力してください。",
+          };
+        }
+
+        // Strip common markdown fences the model might accidentally emit
+        const stripped = textContent
+          .replace(/^```(?:json)?\s*/i, "")
+          .replace(/\s*```\s*$/i, "")
+          .trim();
+
+        let parsed: any;
+        try {
+          parsed = JSON.parse(stripped);
+        } catch {
+          // Try to find the first JSON object substring
+          const match = stripped.match(/\{[\s\S]*\}/);
+          if (match) {
+            try {
+              parsed = JSON.parse(match[0]);
+            } catch {
+              parsed = null;
+            }
+          }
+        }
+
+        if (!parsed || typeof parsed !== "object") {
+          console.error("[OCR] Failed to parse JSON from model:", stripped.slice(0, 200));
+          return {
+            groupName: "",
+            dateTimeText: "",
+            parsedDateTime: "",
+            title: "",
+            confidence: "low" as const,
+            notes: "AI応答を解析できませんでした。手動で入力してください。",
+          };
+        }
+
+        const groupName = typeof parsed.groupName === "string" ? parsed.groupName : "";
         const title = groupName ? `${groupName}${titleSuffix}` : "";
+        const confidence = ["high", "medium", "low"].includes(parsed.confidence)
+          ? (parsed.confidence as "high" | "medium" | "low")
+          : "low";
 
         return {
           groupName,
-          dateTimeText: parsed.dateTimeText ?? "",
-          parsedDateTime: parsed.parsedDateTime ?? "",
+          dateTimeText: typeof parsed.dateTimeText === "string" ? parsed.dateTimeText : "",
+          parsedDateTime: typeof parsed.parsedDateTime === "string" ? parsed.parsedDateTime : "",
           title,
-          confidence: parsed.confidence ?? "low",
-          notes: parsed.notes ?? "",
+          confidence,
+          notes: typeof parsed.notes === "string" ? parsed.notes : "",
         };
       }),
   }),
