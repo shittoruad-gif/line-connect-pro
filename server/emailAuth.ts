@@ -29,7 +29,7 @@ function getBaseUrl(req: Request): string {
   return `${proto}://${host}`;
 }
 
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "noreply@resend.dev";
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
 
 async function sendVerificationEmail(req: Request, email: string, token: string) {
   const resend = getResend();
@@ -126,9 +126,9 @@ export function registerEmailAuthRoutes(app: Express) {
       if (user) {
         await db.updatePasswordHash(user.id, passwordHash);
 
-        // If Resend is configured, send verification email
         const resend = getResend();
         if (resend) {
+          // Send verification email
           const token = generateToken();
           await db.createEmailToken({
             userId: user.id,
@@ -138,7 +138,7 @@ export function registerEmailAuthRoutes(app: Express) {
           });
           await sendVerificationEmail(req, email, token);
         } else {
-          // No email service configured — auto-verify
+          // No email service — auto-verify
           await db.setEmailVerified(user.id);
         }
       }
