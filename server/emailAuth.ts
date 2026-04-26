@@ -333,6 +333,7 @@ export function registerEmailAuthRoutes(app: Express) {
 
       const passwordHash = hashPassword(password);
       await db.updatePasswordHash(emailToken.userId, passwordHash);
+      await db.setEmailVerified(emailToken.userId);
       await db.markEmailTokenUsed(emailToken.id);
 
       res.json({ success: true });
