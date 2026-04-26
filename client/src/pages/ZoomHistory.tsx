@@ -36,31 +36,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-async function safeCopy(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    document.body.appendChild(ta);
-    ta.focus(); ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return ok;
-  } catch {
-    return false;
-  }
-}
-
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
-    const ok = await safeCopy(text);
-    if (!ok) { toast.error("コピーに失敗しました"); return; }
+    await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -201,7 +180,7 @@ export default function ZoomHistory() {
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-28 sm:w-40">
+              <SelectTrigger className="w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -242,8 +221,8 @@ export default function ZoomHistory() {
           <div className="space-y-3">
             {filtered.map((meeting) => (
               <Card key={meeting.id} className="border-border shadow-sm hover:shadow-md transition-shadow">
-                <CardContent className="p-4 sm:p-5">
-                  <div className="flex items-start justify-between gap-2 sm:gap-4">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0 space-y-3">
                       {/* Title + Status */}
                       <div className="flex items-center gap-2 flex-wrap">
@@ -357,8 +336,7 @@ export default function ZoomHistory() {
             <div className="flex gap-3 mt-4">
               <Button className="flex-1 gap-2" onClick={async () => {
                 if (!invitationText) return;
-                const ok = await safeCopy(invitationText);
-                if (!ok) { toast.error("コピーに失敗しました"); return; }
+                await navigator.clipboard.writeText(invitationText);
                 setInvitationCopied(true);
                 setTimeout(() => setInvitationCopied(false), 2000);
                 toast.success("招待文をコピーしました");

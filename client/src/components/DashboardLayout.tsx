@@ -24,9 +24,9 @@ import { Input } from "./ui/input";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
-  LayoutDashboard, LogOut, PanelLeft, Video,
-  Menu, Settings, ChevronDown, Clock, FileText, Mail,
-  Ticket,
+  LayoutDashboard, LogOut, PanelLeft, Building2, MessageSquare,
+  Menu, Bot, Send, Users, FileText, Palette, Settings, ChevronDown,
+  MessageCircle, Video, Zap, History, Sliders, Mail, RefreshCw, Ticket, MailCheck,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -42,38 +42,26 @@ export type MenuItem = {
   adminOnly?: boolean;
 };
 
-type MenuGroup = {
-  label: string;
-  items: MenuItem[];
-};
-
-const menuGroups: MenuGroup[] = [
-  {
-    label: "",
-    items: [
-      { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
-    ],
-  },
-  {
-    label: "Zoom",
-    items: [
-      { icon: Video, label: "Zoom URL 発行", path: "/zoom" },
-      { icon: Clock, label: "ミーティング履歴", path: "/zoom-history" },
-      { icon: Mail, label: "招待文テンプレート", path: "/invitation-template" },
-    ],
-  },
-  {
-    label: "設定",
-    items: [
-      { icon: Settings, label: "Zoom API設定", path: "/zoom-settings" },
-      { icon: FileText, label: "アプリ設定", path: "/app-settings" },
-      { icon: Ticket, label: "パスコード��理", path: "/passcodes", adminOnly: true },
-    ],
-  },
+const menuItems: MenuItem[] = [
+  { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
+  { icon: Building2, label: "クライアント管理", path: "/clients", adminOnly: true },
+  { icon: Settings, label: "LINE連携設定", path: "/line-settings" },
+  { icon: Menu, label: "リッチメニュー", path: "/rich-menus" },
+  { icon: Bot, label: "自動応答", path: "/auto-replies" },
+  { icon: MessageSquare, label: "AIチャットボット", path: "/chatbot" },
+  { icon: MessageCircle, label: "あいさつメッセージ", path: "/greeting" },
+  { icon: Send, label: "ステップ配信", path: "/step-delivery" },
+  { icon: Users, label: "友だち管理", path: "/friends" },
+  { icon: FileText, label: "配信履歴", path: "/message-logs" },
+  { icon: Palette, label: "テンプレート", path: "/templates" },
+  { icon: Zap, label: "Zoom URL発行", path: "/zoom" },
+  { icon: History, label: "Zoom履歴", path: "/zoom-history" },
+  { icon: RefreshCw, label: "定期ミーティング", path: "/recurring" },
+  { icon: Mail, label: "招待文テンプレート", path: "/invitation-template" },
+  { icon: Video, label: "Zoom設定", path: "/zoom-settings" },
+  { icon: Sliders, label: "Zoomデフォルト設定", path: "/app-settings" },
+  { icon: Ticket, label: "パスコード管理", path: "/passcodes", adminOnly: true },
 ];
-
-// Flat list for route matching
-const menuItems: MenuItem[] = menuGroups.flatMap((g) => g.items);
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 260;
@@ -194,21 +182,21 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-14 justify-center border-b border-sidebar-border/50">
+          <SidebarHeader className="h-16 justify-center">
             <div className="flex items-center gap-3 px-2 transition-all w-full">
               <button
                 onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-sidebar-accent rounded-lg transition-colors focus:outline-none shrink-0"
+                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
                 aria-label="Toggle navigation"
               >
-                <PanelLeft className="h-4 w-4" />
+                <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="h-7 w-7 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
-                    <Video className="h-3.5 w-3.5" />
+                  <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
+                    <Video className="h-3.5 w-3.5 text-primary-foreground" />
                   </div>
-                  <span className="font-bold tracking-tight truncate text-sm">
+                  <span className="font-semibold tracking-tight truncate text-sm">
                     Zoom URL 自動発行
                   </span>
                 </div>
@@ -216,43 +204,27 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0 overflow-y-auto">
-            {menuGroups.map((group) => {
-              const groupItems = group.items.filter(
-                (item) => !item.adminOnly || isAdmin
-              );
-              if (groupItems.length === 0) return null;
-              return (
-                <div key={group.label || "__top"} className="px-2 py-1">
-                  {group.label && !isCollapsed && (
-                    <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest opacity-60">
-                      {group.label}
-                    </div>
-                  )}
-                  {group.label && isCollapsed && (
-                    <div className="my-1 mx-auto w-4 border-t border-sidebar-border" />
-                  )}
-                  <SidebarMenu>
-                    {groupItems.map((item) => {
-                      const isActive = location.startsWith(item.path);
-                      return (
-                        <SidebarMenuItem key={item.path}>
-                          <SidebarMenuButton
-                            isActive={isActive}
-                            onClick={() => setLocation(item.path)}
-                            tooltip={item.label}
-                            className={`h-9 transition-all font-normal rounded-lg ${isActive ? "bg-sidebar-accent font-medium" : "hover:bg-sidebar-accent/50"}`}
-                          >
-                            <item.icon className="h-4 w-4" />
-                            <span>{item.label}</span>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
-                  </SidebarMenu>
-                </div>
-              );
-            })}
+          <SidebarContent className="gap-0">
+            <SidebarMenu className="px-2 py-1">
+              {filteredMenuItems.map((item) => {
+                const isActive = location.startsWith(item.path);
+                return (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      onClick={() => setLocation(item.path)}
+                      tooltip={item.label}
+                      className="h-10 transition-all font-normal"
+                    >
+                      <item.icon
+                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                      />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
           </SidebarContent>
 
           <SidebarFooter className="p-3">
@@ -307,7 +279,7 @@ function DashboardLayoutContent({
           <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
-              <span className="tracking-tight text-foreground text-sm font-medium truncate">
+              <span className="tracking-tight text-foreground text-sm font-medium">
                 {activeMenuItem?.label ?? "メニュー"}
               </span>
             </div>
@@ -376,7 +348,11 @@ function LoginForm() {
         return;
       }
 
-      // Registration auto-verifies, reload to enter dashboard
+      if (mode === "register") {
+        setMode("registered");
+        return;
+      }
+
       window.location.reload();
     } catch {
       toast.error("通信エラーが発生しました");
@@ -413,15 +389,15 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-primary/5 to-background">
-      <div className="flex flex-col items-center gap-5 p-8 max-w-sm w-full bg-card rounded-2xl shadow-lg border">
-        <div className="flex flex-col items-center gap-2 mb-1">
-          <div className="h-14 w-14 rounded-2xl bg-primary flex items-center justify-center shadow-md">
-            <Video className="h-7 w-7 text-primary-foreground" />
+    <div className="flex items-center justify-center min-h-screen bg-background">
+      <div className="flex flex-col items-center gap-6 p-8 max-w-md w-full">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
+            <Video className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="text-lg font-bold tracking-tight">Zoom URL 自動発行</span>
+          <span className="text-xl font-bold tracking-tight">Zoom URL 自動発行</span>
         </div>
-        <h1 className="text-xl font-semibold tracking-tight text-center">
+        <h1 className="text-2xl font-semibold tracking-tight text-center">
           {mode === "login" ? "ログイン" : mode === "register" ? "アカウント作成" : "パスワードをリセット"}
         </h1>
         {mode === "forgot" && (
@@ -429,32 +405,30 @@ function LoginForm() {
             登録したメールアドレスを入力してください。パスワードリセットのリンクを送信します。
           </p>
         )}
-        <form onSubmit={handleSubmit} className="w-full space-y-3">
+        <form onSubmit={handleSubmit} className="w-full space-y-4">
           {mode === "register" && (
             <div>
-              <label className="text-sm font-medium mb-1 block">お名前</label>
+              <label className="text-sm text-muted-foreground mb-1 block">お名前</label>
               <Input
                 placeholder="山田 太郎"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-11 rounded-xl"
               />
             </div>
           )}
           <div>
-            <label className="text-sm font-medium mb-1 block">メールアドレス</label>
+            <label className="text-sm text-muted-foreground mb-1 block">メールアドレス</label>
             <Input
               type="email"
               required
               placeholder="email@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-11 rounded-xl"
             />
           </div>
           {mode !== "forgot" && (
             <div>
-              <label className="text-sm font-medium mb-1 block">パスワード</label>
+              <label className="text-sm text-muted-foreground mb-1 block">パスワード</label>
               <Input
                 type="password"
                 required
@@ -462,26 +436,25 @@ function LoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 minLength={6}
-                className="h-11 rounded-xl"
               />
             </div>
           )}
-          <Button type="submit" size="lg" className="w-full h-12 rounded-xl text-base font-bold shadow-sm" disabled={loading}>
+          <Button type="submit" size="lg" className="w-full" disabled={loading}>
             {loading ? "処理中..." : mode === "login" ? "ログイン" : mode === "register" ? "アカウント作成" : "リセットメールを送信"}
           </Button>
         </form>
         {mode === "login" && (
-          <button className="text-xs text-muted-foreground hover:text-primary transition-colors" onClick={() => setMode("forgot")}>
+          <button className="text-xs text-muted-foreground hover:text-primary" onClick={() => setMode("forgot")}>
             パスワードを忘れた方
           </button>
         )}
         <p className="text-sm text-muted-foreground">
           {mode === "login" ? (
-            <>アカウントをお持ちでない方は <button className="text-primary font-medium hover:underline" onClick={() => setMode("register")}>新規登録</button></>
+            <>アカウントをお持ちでない方は <button className="text-primary hover:underline" onClick={() => setMode("register")}>新規登録</button></>
           ) : mode === "register" ? (
-            <>既にアカウントをお持ちの方は <button className="text-primary font-medium hover:underline" onClick={() => setMode("login")}>ログイン</button></>
+            <>既にアカウントをお持ちの方は <button className="text-primary hover:underline" onClick={() => setMode("login")}>ログイン</button></>
           ) : (
-            <button className="text-primary font-medium hover:underline" onClick={() => setMode("login")}>ログインに戻る</button>
+            <button className="text-primary hover:underline" onClick={() => setMode("login")}>ログインに戻る</button>
           )}
         </p>
       </div>

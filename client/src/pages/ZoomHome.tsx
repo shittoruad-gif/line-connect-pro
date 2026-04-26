@@ -44,72 +44,19 @@ type MeetingResult = {
   clientName: string;
 };
 
-/** Resize image to max 1200px and compress as JPEG to reduce upload size.
- *  Also converts HEIC/PNG/etc. to JPEG so vision APIs accept it. */
-function resizeImage(file: File, maxSize = 1200): Promise<{ base64: string; contentType: string }> {
+function toBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      try {
-        let { width, height } = img;
-        if (!width || !height) throw new Error("画像サイズを取得できません");
-        if (width > maxSize || height > maxSize) {
-          const ratio = Math.min(maxSize / width, maxSize / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) throw new Error("Canvas 2Dコンテキストを取得できません");
-        ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-        const comma = dataUrl.indexOf(",");
-        if (comma < 0) throw new Error("画像のエンコードに失敗しました");
-        resolve({ base64: dataUrl.slice(comma + 1), contentType: "image/jpeg" });
-      } catch (e) {
-        reject(e);
-      } finally {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("画像の読み込みに失敗しました。別の画像をお試しください。"));
-    };
-    img.src = objectUrl;
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve((reader.result as string).split(",")[1]);
+    reader.onerror = reject;
   });
-}
-
-async function safeCopy(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-    // Fallback for insecure contexts or older browsers
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.style.position = "fixed";
-    ta.style.left = "-9999px";
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return ok;
-  } catch {
-    return false;
-  }
 }
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
-    const ok = await safeCopy(text);
-    if (!ok) { toast.error("コピーに失敗しました"); return; }
+    await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -159,39 +106,19 @@ export default function ZoomHome() {
   const renderInvitationMutation = trpc.invitationTemplates.render.useMutation();
 
   const handleFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) {
-      toast.error("画像ファイルを選択してください"); return;
-    }
+    if (!file.type.startsWith("image/")) { toast.error("画像ファイルを選択してください"); return; }
     setImageFile(file);
-    // Revoke previous preview URL to avoid memory leak
-    setImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(file); });
+    setImagePreview(URL.createObjectURL(file));
     setOcrResult(null);
     setMeetingResult(null);
     setStep("ocr");
 
     try {
-      // Resize once, then use the same payload for BOTH upload and OCR.
-      // This keeps the network payload small and avoids "request aborted"
-      // errors on mobile from large multi-megabyte screenshots.
-      const resized = await resizeImage(file);
-
-      // Upload (best-effort: we still proceed to OCR even if upload fails)
-      try {
-        const { url } = await uploadMutation.mutateAsync({
-          base64: resized.base64,
-          contentType: resized.contentType,
-          filename: file.name.replace(/\.(png|heic|heif|webp)$/i, ".jpg"),
-        });
-        setUploadedUrl(url);
-      } catch (uploadErr) {
-        console.warn("[Upload] screenshot save failed, continuing with OCR:", uploadErr);
-      }
-
+      const base64 = await toBase64(file);
+      const { url } = await uploadMutation.mutateAsync({ base64, contentType: file.type, filename: file.name });
+      setUploadedUrl(url);
       toast.info("スクリーンショットを解析中...");
-      const result = await ocrMutation.mutateAsync({
-        base64: resized.base64,
-        contentType: resized.contentType,
-      });
+      const result = await ocrMutation.mutateAsync({ imageUrl: url });
       setOcrResult(result);
       setEditTitle(result.title);
       setEditDuration(appSettings?.defaultDuration ?? 60);
@@ -201,20 +128,15 @@ export default function ZoomHome() {
           const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
           setEditDateTime(local.toISOString().slice(0, 16));
         }
-      }
-      if (!result.parsedDateTime || isNaN(new Date(result.parsedDateTime).getTime())) {
+      } else {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(10, 0, 0, 0);
+        tomorrow.setMinutes(0, 0, 0);
         const local = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000);
         setEditDateTime(local.toISOString().slice(0, 16));
       }
       setStep("confirm");
-      if (result.groupName) {
-        toast.success("解析完了！内容を確認してください");
-      } else {
-        toast.info("グループ名を自動検出できませんでした。手動で入力してください");
-      }
+      toast.success("解析完了！内容を確認してください");
     } catch (err: any) {
       toast.error("解析に失敗しました: " + (err?.message ?? "不明なエラー"));
       setStep("upload");
@@ -293,9 +215,7 @@ export default function ZoomHome() {
   };
 
   const handleReset = () => {
-    setImageFile(null);
-    setImagePreview(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
-    setUploadedUrl(null);
+    setImageFile(null); setImagePreview(null); setUploadedUrl(null);
     setOcrResult(null); setMeetingResult(null);
     setEditTitle(""); setEditDateTime(""); setEditDuration(60);
     setEditClientName(""); setStep("upload");
@@ -360,7 +280,7 @@ export default function ZoomHome() {
                 <Label htmlFor="manual-title" className="text-sm font-medium">タイトル（カスタム、空欄で自動生成）</Label>
                 <Input id="manual-title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder={editClientName ? `${editClientName}${appSettings?.titleSuffix ?? "様広告MTG"}` : "自動生成されます"} />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="manual-datetime" className="text-sm font-medium flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />開始日時 <span className="text-destructive">*</span></Label>
                   <Input id="manual-datetime" type="datetime-local" value={editDateTime} onChange={(e) => setEditDateTime(e.target.value)} />
@@ -445,7 +365,7 @@ export default function ZoomHome() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl bg-muted/40 text-sm">
+              <div className="grid grid-cols-2 gap-3 p-4 rounded-xl bg-muted/40 text-sm">
                 <div><p className="text-xs text-muted-foreground mb-1">グループ名</p><p className="font-medium text-foreground">{ocrResult.groupName || "—"}</p></div>
                 <div><p className="text-xs text-muted-foreground mb-1">抽出された日時</p><p className="font-medium text-foreground">{ocrResult.dateTimeText || "—"}</p></div>
               </div>
@@ -455,7 +375,7 @@ export default function ZoomHome() {
                   <Label htmlFor="title" className="text-sm font-medium">ミーティングタイトル</Label>
                   <Input id="title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="〇〇様広告MTG" className="font-medium" disabled={step === "result"} />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label htmlFor="datetime" className="text-sm font-medium flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />開始日時</Label>
                     <Input id="datetime" type="datetime-local" value={editDateTime} onChange={(e) => setEditDateTime(e.target.value)} disabled={step === "result"} />
@@ -491,7 +411,7 @@ export default function ZoomHome() {
               <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
                 <p className="text-xs text-muted-foreground mb-1">ミーティングタイトル</p>
                 <p className="font-semibold text-foreground text-lg">{meetingResult.title}</p>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{new Date(meetingResult.scheduledAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}</span>
                   <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{meetingResult.duration}分</span>
                 </div>
@@ -518,18 +438,16 @@ export default function ZoomHome() {
               <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
                 <span>ミーティングID: <span className="font-mono">{meetingResult.zoomMeetingId}</span></span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                <Button variant="outline" className="gap-2 text-xs sm:text-sm" onClick={async () => {
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <Button variant="outline" className="gap-2" onClick={() => {
                   const text = `【${meetingResult.title}】\n日時: ${new Date(meetingResult.scheduledAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}\n参加URL: ${meetingResult.joinUrl}\nパスワード: ${meetingResult.password}`;
-                  const ok = await safeCopy(text);
-                  if (ok) toast.success("ミーティング情報をコピーしました");
-                  else toast.error("コピーに失敗しました");
-                }}><Copy className="w-4 h-4 shrink-0" />全情報をコピー</Button>
-                <Button variant="outline" className="gap-2 text-xs sm:text-sm" onClick={handleGenerateInvitation} disabled={renderInvitationMutation.isPending}>
-                  {renderInvitationMutation.isPending ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" />生成中...</> : <><Mail className="w-4 h-4 shrink-0" />招待文を生成</>}
+                  navigator.clipboard.writeText(text); toast.success("ミーティング情報をコピーしました");
+                }}><Copy className="w-4 h-4" />全情報をコピー</Button>
+                <Button variant="outline" className="gap-2" onClick={handleGenerateInvitation} disabled={renderInvitationMutation.isPending}>
+                  {renderInvitationMutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" />生成中...</> : <><Mail className="w-4 h-4" />招待文を生成</>}
                 </Button>
-                <Button variant="outline" className="gap-2 text-xs sm:text-sm" onClick={handleAddToCalendar}><CalendarPlus className="w-4 h-4 shrink-0" />Googleカレンダーに追加</Button>
-                <Button className="gap-2 text-xs sm:text-sm" onClick={handleReset}><Zap className="w-4 h-4 shrink-0" />新しく発行する</Button>
+                <Button variant="outline" className="gap-2" onClick={handleAddToCalendar}><CalendarPlus className="w-4 h-4" />Googleカレンダーに追加</Button>
+                <Button className="gap-2" onClick={handleReset}><Zap className="w-4 h-4" />新しく発行する</Button>
               </div>
             </CardContent>
           </Card>
@@ -547,17 +465,16 @@ export default function ZoomHome() {
             <div className="p-4 rounded-xl bg-muted/40 border border-border max-h-80 overflow-y-auto">
               <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed">{invitationText}</pre>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 mt-4">
-              <Button className="flex-1 gap-2 text-sm" onClick={async () => {
+            <div className="flex gap-3 mt-4">
+              <Button className="flex-1 gap-2" onClick={async () => {
                 if (!invitationText) return;
-                const ok = await safeCopy(invitationText);
-                if (!ok) { toast.error("コピーに失敗しました"); return; }
+                await navigator.clipboard.writeText(invitationText);
                 setInvitationCopied(true); setTimeout(() => setInvitationCopied(false), 2000);
                 toast.success("招待文をコピーしました");
               }}>
                 {invitationCopied ? <><Check className="w-4 h-4 text-green-400" />コピー済み</> : <><Copy className="w-4 h-4" />招待文をコピー</>}
               </Button>
-              <Button variant="outline" onClick={() => window.location.href = "/invitation-template"} className="gap-2 text-sm">テンプレートを編集</Button>
+              <Button variant="outline" onClick={() => window.location.href = "/invitation-template"} className="gap-2">テンプレートを編集</Button>
             </div>
           </div>
         </DialogContent>

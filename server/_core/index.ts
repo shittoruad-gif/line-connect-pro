@@ -1,6 +1,5 @@
 import "dotenv/config";
 import express from "express";
-import { join } from "path";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -46,8 +45,6 @@ async function startServer() {
   registerLineWebhookRoutes(app);
   // SSE real-time notifications
   registerSSERoutes(app);
-  // Serve uploaded files
-  app.use("/uploads", express.static(join(process.cwd(), "uploads")));
   // Health check
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });

@@ -44,14 +44,14 @@ async function sendVerificationEmail(req: Request, email: string, token: string)
   await resend.emails.send({
     from: FROM_EMAIL,
     to: email,
-    subject: "【Zoom URL 自動発行】メールアドレスの確認",
+    subject: "【LINE Connect Pro】メールアドレスの確認",
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #f8f9fa; border-radius: 12px;">
         <h2 style="color: #1a1a2e; margin-bottom: 16px;">メールアドレスの確認</h2>
-        <p style="color: #444; line-height: 1.6;">Zoom URL 自動発行にご登録いただきありがとうございます。</p>
+        <p style="color: #444; line-height: 1.6;">LINE Connect Proにご登録いただきありがとうございます。</p>
         <p style="color: #444; line-height: 1.6;">以下のボタンをクリックして、メールアドレスを確認してください。</p>
         <div style="text-align: center; margin: 32px 0;">
-          <a href="${verifyUrl}" style="background: #2D8CFF; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">
+          <a href="${verifyUrl}" style="background: #06C755; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">
             メールアドレスを確認する
           </a>
         </div>
@@ -74,14 +74,14 @@ async function sendPasswordResetEmail(req: Request, email: string, token: string
   await resend.emails.send({
     from: FROM_EMAIL,
     to: email,
-    subject: "【Zoom URL 自動発行】パスワードリセット",
+    subject: "【LINE Connect Pro】パスワードリセット",
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #f8f9fa; border-radius: 12px;">
         <h2 style="color: #1a1a2e; margin-bottom: 16px;">パスワードリセット</h2>
         <p style="color: #444; line-height: 1.6;">パスワードリセットのリクエストを受け付けました。</p>
         <p style="color: #444; line-height: 1.6;">以下のボタンをクリックして、新しいパスワードを設定してください。</p>
         <div style="text-align: center; margin: 32px 0;">
-          <a href="${resetUrl}" style="background: #2D8CFF; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">
+          <a href="${resetUrl}" style="background: #06C755; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">
             パスワードをリセットする
           </a>
         </div>
@@ -125,8 +125,18 @@ export function registerEmailAuthRoutes(app: Express) {
       const user = await db.getUserByOpenId(openId);
       if (user) {
         await db.updatePasswordHash(user.id, passwordHash);
-        // Auto-verify email (skip email verification flow)
-        await db.setEmailVerified(user.id);
+
+        // Create verification token
+        const token = generateToken();
+        await db.createEmailToken({
+          userId: user.id,
+          token,
+          type: "verify",
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
+        });
+
+        // Send verification email
+        await sendVerificationEmail(req, email, token);
       }
 
       // Create session (user can use the app but will see "unverified" notice)
@@ -138,7 +148,7 @@ export function registerEmailAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.json({ success: true });
+      res.json({ success: true, needsVerification: true });
     } catch (error) {
       console.error("[EmailAuth] Register failed:", error);
       res.status(500).json({ error: "登録に失敗しました" });
@@ -163,6 +173,11 @@ export function registerEmailAuthRoutes(app: Express) {
       const passwordHash = hashPassword(password);
       if (user.passwordHash !== passwordHash) {
         res.status(401).json({ error: "メールアドレスまたはパスワードが正しくありません" });
+        return;
+      }
+
+      if (!user.emailVerified) {
+        res.status(403).json({ error: "メールアドレスが未確認です。登録時に送信された確認メールをご確認ください。", code: "EMAIL_NOT_VERIFIED" });
         return;
       }
 
@@ -328,14 +343,14 @@ function verifyResultHtml(title: string, message: string, showLogin = false): st
   return `<!DOCTYPE html>
 <html lang="ja">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${title} - Zoom URL 自動発行</title>
+<title>${title} - LINE Connect Pro</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d0d1a; color: #e0e0e0; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
   .card { background: #1a1a2e; border: 1px solid #2a2a4e; border-radius: 16px; padding: 48px; max-width: 420px; text-align: center; }
-  h1 { color: #2D8CFF; font-size: 24px; margin-bottom: 16px; }
+  h1 { color: #06C755; font-size: 24px; margin-bottom: 16px; }
   p { color: #aaa; line-height: 1.6; }
-  .btn { display: inline-block; margin-top: 24px; background: #2D8CFF; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; }
-  .btn:hover { background: #1a7ae8; }
+  .btn { display: inline-block; margin-top: 24px; background: #06C755; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; }
+  .btn:hover { background: #05b34c; }
 </style>
 </head>
 <body>

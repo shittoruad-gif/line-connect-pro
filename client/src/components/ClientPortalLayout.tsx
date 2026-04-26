@@ -24,8 +24,7 @@ import { useIsMobile } from "@/hooks/useMobile";
 import {
   LayoutDashboard, LogOut, PanelLeft, MessageSquare,
   Menu, Bot, Send, Users, FileText, Settings,
-  ChevronDown, MessageCircle, Target, Megaphone, Bell, CalendarDays,
-  Link2, Workflow, FormInput, Headphones, BarChart3,
+  ChevronDown, MessageCircle,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -39,63 +38,17 @@ export type PortalMenuItem = {
   path: string;
 };
 
-type PortalMenuGroup = {
-  label: string;
-  items: PortalMenuItem[];
-};
-
-const portalMenuGroups: PortalMenuGroup[] = [
-  {
-    label: "",
-    items: [
-      { icon: LayoutDashboard, label: "ダッシュボード", path: "/portal" },
-    ],
-  },
-  {
-    label: "メッセージ",
-    items: [
-      { icon: MessageCircle, label: "あいさつメッセージ", path: "/portal/greeting" },
-      { icon: Send, label: "ステップ配信", path: "/portal/step-delivery" },
-      { icon: Megaphone, label: "セグメント配信", path: "/portal/segment-broadcast" },
-      { icon: Bell, label: "リマインダー", path: "/portal/reminders" },
-      { icon: Headphones, label: "チャット", path: "/portal/operator-chat" },
-      { icon: FileText, label: "配信履歴", path: "/portal/message-logs" },
-    ],
-  },
-  {
-    label: "友だち",
-    items: [
-      { icon: Users, label: "友だち管理", path: "/portal/friends" },
-      { icon: Target, label: "スコアリング", path: "/portal/scoring" },
-    ],
-  },
-  {
-    label: "コンテンツ",
-    items: [
-      { icon: Menu, label: "リッチメニュー", path: "/portal/rich-menus" },
-      { icon: Bot, label: "自動応答", path: "/portal/auto-replies" },
-      { icon: MessageSquare, label: "AIチャット", path: "/portal/chatbot" },
-      { icon: FormInput, label: "フォーム", path: "/portal/liff-forms" },
-    ],
-  },
-  {
-    label: "自動化・計測",
-    items: [
-      { icon: Workflow, label: "自動化", path: "/portal/automation" },
-      { icon: Link2, label: "クリック計測", path: "/portal/tracking" },
-      { icon: BarChart3, label: "CV計測", path: "/portal/conversions" },
-    ],
-  },
-  {
-    label: "設定",
-    items: [
-      { icon: Settings, label: "LINE連携", path: "/portal/line-settings" },
-      { icon: CalendarDays, label: "予約管理", path: "/portal/bookings" },
-    ],
-  },
+const portalMenuItems: PortalMenuItem[] = [
+  { icon: LayoutDashboard, label: "ダッシュボード", path: "/portal" },
+  { icon: Settings, label: "LINE連携設定", path: "/portal/line-settings" },
+  { icon: Menu, label: "リッチメニュー", path: "/portal/rich-menus" },
+  { icon: Bot, label: "自動応答", path: "/portal/auto-replies" },
+  { icon: MessageSquare, label: "AIチャットボット", path: "/portal/chatbot" },
+  { icon: MessageCircle, label: "あいさつメッセージ", path: "/portal/greeting" },
+  { icon: Send, label: "ステップ配信", path: "/portal/step-delivery" },
+  { icon: Users, label: "友だち管理", path: "/portal/friends" },
+  { icon: FileText, label: "配信履歴", path: "/portal/message-logs" },
 ];
-
-const portalMenuItems: PortalMenuItem[] = portalMenuGroups.flatMap((g) => g.items);
 
 const SIDEBAR_WIDTH_KEY = "portal-sidebar-width";
 const DEFAULT_WIDTH = 260;
@@ -306,39 +259,27 @@ function PortalLayoutContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0 overflow-y-auto">
-            {portalMenuGroups.map((group) => (
-              <div key={group.label || "__top"} className="px-2 py-1">
-                {group.label && !isCollapsed && (
-                  <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                    {group.label}
-                  </div>
-                )}
-                {group.label && isCollapsed && (
-                  <div className="my-1 mx-auto w-4 border-t border-border" />
-                )}
-                <SidebarMenu>
-                  {group.items.map((item) => {
-                    const isActive = item.path === "/portal"
-                      ? location === "/portal"
-                      : location.startsWith(item.path);
-                    return (
-                      <SidebarMenuItem key={item.path}>
-                        <SidebarMenuButton
-                          isActive={isActive}
-                          onClick={() => setLocation(item.path)}
-                          tooltip={item.label}
-                          className={`h-9 transition-all font-normal rounded-lg ${isActive ? "font-medium" : ""}`}
-                        >
-                          <item.icon className={`h-4 w-4 ${isActive ? "text-primary" : ""}`} />
-                          <span>{item.label}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
-              </div>
-            ))}
+          <SidebarContent className="gap-0">
+            <SidebarMenu className="px-2 py-1">
+              {portalMenuItems.map((item) => {
+                const isActive = item.path === "/portal"
+                  ? location === "/portal"
+                  : location.startsWith(item.path);
+                return (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      onClick={() => setLocation(item.path)}
+                      tooltip={item.label}
+                      className="h-10 transition-all font-normal"
+                    >
+                      <item.icon className={`h-4 w-4 ${isActive ? "text-primary" : ""}`} />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
           </SidebarContent>
 
           <SidebarFooter className="p-3">

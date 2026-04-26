@@ -47,23 +47,9 @@ export default function PasscodeManagement() {
     onError: (err) => toast.error(err.message),
   });
 
-  const copyCode = async (code: string) => {
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(code);
-      } else {
-        const ta = document.createElement("textarea");
-        ta.value = code;
-        ta.style.position = "fixed"; ta.style.left = "-9999px";
-        document.body.appendChild(ta);
-        ta.focus(); ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-      }
-      toast.success(`コピーしました: ${code}`);
-    } catch {
-      toast.error("コピーに失敗しました");
-    }
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    toast.success(`コピーしました: ${code}`);
   };
 
   return (
@@ -83,7 +69,7 @@ export default function PasscodeManagement() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex-1 min-w-[150px]">
+            <div className="flex-1 min-w-[200px]">
               <label className="text-sm text-muted-foreground mb-1 block">コード</label>
               <Input
                 placeholder="例: ZOOM-FREE-2026"
@@ -132,14 +118,14 @@ export default function PasscodeManagement() {
         <CardHeader>
           <CardTitle className="text-base">パスコード一覧</CardTitle>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
+        <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>コード</TableHead>
-                <TableHead className="hidden sm:table-cell">プラン</TableHead>
+                <TableHead>プラン</TableHead>
                 <TableHead>使用数</TableHead>
-                <TableHead className="hidden sm:table-cell">ステータス</TableHead>
+                <TableHead>ステータス</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
@@ -154,13 +140,13 @@ export default function PasscodeManagement() {
                       </button>
                     </div>
                   </TableCell>
-                  <TableCell className="hidden sm:table-cell">
+                  <TableCell>
                     <Badge variant={pc.plan === "lifetime" ? "default" : "secondary"}>
                       {pc.plan === "lifetime" ? "永年無料" : "有料"}
                     </Badge>
                   </TableCell>
                   <TableCell>{pc.currentUses} / {pc.maxUses}</TableCell>
-                  <TableCell className="hidden sm:table-cell">
+                  <TableCell>
                     <Badge variant={pc.isActive ? "default" : "outline"}>
                       {pc.isActive ? "有効" : "無効"}
                     </Badge>
