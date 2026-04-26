@@ -126,20 +126,24 @@ export function registerEmailAuthRoutes(app: Express) {
       if (user) {
         await db.updatePasswordHash(user.id, passwordHash);
 
-        // Create verification token
-        const token = generateToken();
-        await db.createEmailToken({
-          userId: user.id,
-          token,
-          type: "verify",
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
-        });
-
-        // Send verification email
-        await sendVerificationEmail(req, email, token);
+        // If Resend is configured, send verification email
+        const resend = getResend();
+        if (resend) {
+          const token = generateToken();
+          await db.createEmailToken({
+            userId: user.id,
+            token,
+            type: "verify",
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
+          });
+          await sendVerificationEmail(req, email, token);
+        } else {
+          // No email service configured — auto-verify
+          await db.setEmailVerified(user.id);
+        }
       }
 
-      // Create session (user can use the app but will see "unverified" notice)
+      // Create session
       const sessionToken = await sdk.createSessionToken(openId, {
         name: name || email.split("@")[0],
         expiresInMs: ONE_YEAR_MS,
@@ -148,7 +152,7 @@ export function registerEmailAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.json({ success: true, needsVerification: true });
+      res.json({ success: true, needsVerification: !!getResend() });
     } catch (error) {
       console.error("[EmailAuth] Register failed:", error);
       res.status(500).json({ error: "登録に失敗しました" });
@@ -176,7 +180,7 @@ export function registerEmailAuthRoutes(app: Express) {
         return;
       }
 
-      if (!user.emailVerified) {
+      if (!user.emailVerified && getResend()) {
         res.status(403).json({ error: "メールアドレスが未確認です。登録時に送信された確認メールをご確認ください。", code: "EMAIL_NOT_VERIFIED" });
         return;
       }
