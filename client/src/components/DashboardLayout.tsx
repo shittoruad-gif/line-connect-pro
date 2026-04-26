@@ -54,13 +54,7 @@ const menuItems: MenuItem[] = [
   { icon: Users, label: "友だち管理", path: "/friends" },
   { icon: FileText, label: "配信履歴", path: "/message-logs" },
   { icon: Palette, label: "テンプレート", path: "/templates" },
-  { icon: Zap, label: "Zoom URL発行", path: "/zoom" },
-  { icon: History, label: "Zoom履歴", path: "/zoom-history" },
-  { icon: RefreshCw, label: "定期ミーティング", path: "/recurring" },
-  { icon: Mail, label: "招待文テンプレート", path: "/invitation-template" },
-  { icon: Video, label: "Zoom設定", path: "/zoom-settings" },
-  { icon: Sliders, label: "Zoomデフォルト設定", path: "/app-settings" },
-  { icon: Ticket, label: "パスコード管理", path: "/passcodes", adminOnly: true },
+  { icon: Sliders, label: "アプリ設定", path: "/app-settings", adminOnly: true },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -194,10 +188,10 @@ function DashboardLayoutContent({
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
-                    <Video className="h-3.5 w-3.5 text-primary-foreground" />
+                    <MessageSquare className="h-3.5 w-3.5 text-primary-foreground" />
                   </div>
                   <span className="font-semibold tracking-tight truncate text-sm">
-                    Zoom URL 自動発行
+                    LINE Connect Pro
                   </span>
                 </div>
               ) : null}
@@ -368,9 +362,9 @@ function LoginForm() {
         <div className="flex flex-col items-center gap-6 p-8 max-w-md w-full text-center">
           <div className="flex items-center gap-3 mb-2">
             <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-              <Video className="h-5 w-5 text-primary-foreground" />
+              <MessageSquare className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold tracking-tight">Zoom URL 自動発行</span>
+            <span className="text-xl font-bold tracking-tight">LINE Connect Pro</span>
           </div>
           <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto">
             <Mail className="h-8 w-8 text-primary" />
@@ -393,9 +387,9 @@ function LoginForm() {
       <div className="flex flex-col items-center gap-6 p-8 max-w-md w-full">
         <div className="flex items-center gap-3 mb-2">
           <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-            <Video className="h-5 w-5 text-primary-foreground" />
+            <MessageSquare className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="text-xl font-bold tracking-tight">Zoom URL 自動発行</span>
+          <span className="text-xl font-bold tracking-tight">LINE Connect Pro</span>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-center">
           {mode === "login" ? "ログイン" : mode === "register" ? "アカウント作成" : "パスワードをリセット"}

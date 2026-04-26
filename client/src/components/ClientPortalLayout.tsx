@@ -83,7 +83,7 @@ export default function ClientPortalLayout({
             <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
               <MessageSquare className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold tracking-tight">Zoom URL 自動発行</span>
+            <span className="text-xl font-bold tracking-tight">LINE Connect Pro</span>
           </div>
           <div className="flex flex-col items-center gap-4">
             <h1 className="text-2xl font-semibold tracking-tight text-center">
@@ -112,7 +112,7 @@ export default function ClientPortalLayout({
             <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
               <MessageSquare className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold tracking-tight">Zoom URL 自動発行</span>
+            <span className="text-xl font-bold tracking-tight">LINE Connect Pro</span>
           </div>
           <div className="flex flex-col items-center gap-4">
             <h1 className="text-2xl font-semibold tracking-tight text-center">

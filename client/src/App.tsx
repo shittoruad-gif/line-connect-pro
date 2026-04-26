@@ -22,13 +22,7 @@ import ChatbotEditorPage from "./pages/ChatbotEditor";
 import { PortalDashboard, PortalLineSettings, withPortalClient } from "./pages/portal";
 import LandingPage from "./pages/Landing";
 import { LoginPage, RegisterPage, ForgotPasswordPage, ResetPasswordPage } from "./pages/AuthPages";
-import ZoomHome from "./pages/ZoomHome";
-import ZoomHistory from "./pages/ZoomHistory";
-import ZoomSettingsPage from "./pages/ZoomSettings";
 import AppSettingsPage from "./pages/AppSettingsPage";
-import InvitationTemplatePage from "./pages/InvitationTemplatePage";
-import RecurringMeetingPage from "./pages/RecurringMeetingPage";
-import PasscodeManagement from "./pages/PasscodeManagement";
 import ResetPassword from "./pages/ResetPassword";
 
 // Portal-wrapped versions of admin pages (auto-inject client context)
@@ -61,13 +55,7 @@ function AdminRouter() {
         <Route path="/chatbot" component={ChatbotPage} />
         <Route path="/chatbot/:id" component={ChatbotEditorPage} />
         <Route path="/templates" component={TemplatesPage} />
-        <Route path="/zoom" component={ZoomHome} />
-        <Route path="/zoom-history" component={ZoomHistory} />
-        <Route path="/zoom-settings" component={ZoomSettingsPage} />
         <Route path="/app-settings" component={AppSettingsPage} />
-        <Route path="/invitation-template" component={InvitationTemplatePage} />
-        <Route path="/recurring" component={RecurringMeetingPage} />
-        <Route path="/passcodes" component={PasscodeManagement} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>
