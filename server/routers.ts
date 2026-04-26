@@ -7,6 +7,7 @@ import { z } from "zod";
 import * as db from "./db";
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
+import { createHash } from "crypto";
 import { invokeLLM } from "./_core/llm";
 import { uploadRichMenuToLine, deleteRichMenuFromLine } from "./lineWebhook";
 import { createZoomMeeting, generatePassword } from "./zoom";
@@ -98,6 +99,17 @@ export const appRouter = router({
   // ===== Users (admin) =====
   users: router({
     list: adminProcedure.query(async () => db.getAllUsers()),
+    resetPassword: adminProcedure
+      .input(z.object({
+        userId: z.number(),
+        newPassword: z.string().min(6, "パスワードは6文字以上で設定してください"),
+      }))
+      .mutation(async ({ input }) => {
+        const hash = createHash("sha256").update(input.newPassword).digest("hex");
+        await db.updatePasswordHash(input.userId, hash);
+        await db.setEmailVerified(input.userId);
+        return { success: true };
+      }),
   }),
 
   // ===== LINE Channels =====
